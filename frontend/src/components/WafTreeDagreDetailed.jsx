@@ -37,7 +37,7 @@ function addSubRuleChain(ruleGroup, parentId, allNodes, allEdges) {
     const subRuleAction = getAction(subRule);
     const subRuleId = `${parentId}-subrule-${index}`;
 
-    const labelText = `SubRule: ${subRule.Name} (Priority: ${subRule.Priority}) | Action: ${subRuleAction}`;
+    const labelText = `SubRule: ${subRule.Name}\nPriority: ${subRule.Priority}\nAction: ${subRuleAction}`;
     allNodes.push({
       id: subRuleId,
       data: { label: labelText },
@@ -47,6 +47,10 @@ function addSubRuleChain(ruleGroup, parentId, allNodes, allEdges) {
         padding: 10,
         borderRadius: 8,
         color: "#fff",
+        width: "auto",
+        minWidth: 250,
+        textAlign: "center",
+        whiteSpace: "pre-wrap",
       },
     });
 
@@ -92,6 +96,10 @@ function generateFlowDiagram(acl) {
       padding: 10,
       borderRadius: 8,
       color: "#fff",
+      width: "auto",
+      minWidth: 250,
+      textAlign: "center",
+      whiteSpace: "pre-wrap",
     },
   });
 
@@ -107,13 +115,18 @@ function generateFlowDiagram(acl) {
     nodes.push({
       id: ruleId,
       data: {
-        label: `Rule: ${rule.Name} (Priority: ${rule.Priority}) | Action: ${ruleAction}`,
+        label: `Rule: ${rule.Name}\nPriority: ${rule.Priority}\nAction: ${ruleAction}`,
       },
       position: { x: 0, y: 0 },
       style: {
         background: "#60a5fa",
         padding: 10,
         borderRadius: 8,
+        color: "#fff",
+        width: "auto",
+        minWidth: 250,
+        textAlign: "center",
+        whiteSpace: "pre-wrap",
       },
     });
 
@@ -144,6 +157,10 @@ function generateFlowDiagram(acl) {
       padding: 10,
       borderRadius: 8,
       color: "#fff",
+      width: "auto",
+      minWidth: 250,
+      textAlign: "center",
+      whiteSpace: "pre-wrap",
     },
   });
   edges.push({
@@ -183,13 +200,15 @@ export default function WafTreeDagreDetailed() {
       {acls.map((acl, idx) => {
         const { nodes, edges } = generateFlowDiagram(acl);
         return (
-          <Paper key={acl.Id || idx} style={{ height: 700, marginTop: 30, padding: 10 }}>
+          <>
             <Typography variant="h6">{acl.Name} - Detailed Flow</Typography>
-            <ReactFlow nodes={nodes} edges={edges} fitView>
-              <Background />
-              <Controls />
-            </ReactFlow>
-          </Paper>
+            <Paper key={acl.Id || idx} style={{ height: 700, marginTop: 30, padding: 10 }}>
+              <ReactFlow nodes={nodes} edges={edges} fitView>
+                <Background />
+                <Controls />
+              </ReactFlow>
+            </Paper>
+          </>
         );
       })}
     </Container>

@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.750.0",
     "@aws-sdk/client-wafv2": "^3.750.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

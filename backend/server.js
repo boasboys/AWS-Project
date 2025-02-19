@@ -1,12 +1,17 @@
 import express from "express";
 import cors from "cors";
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand, GetRuleGroupCommand } from "@aws-sdk/client-wafv2";
+import { CloudWatchLogsClient, GetLogEventsCommand } from "@aws-sdk/client-cloudwatch-logs";
 
 const app = express();
 const PORT = 5000;
 
-// AWS WAF Client
+// AWS Clients
 const wafClient = new WAFV2Client({
+  region: "us-east-1",
+});
+
+const cloudWatchClient = new CloudWatchLogsClient({
   region: "us-east-1",
 });
 
@@ -54,6 +59,28 @@ async function getRuleGroupDetails(ruleGroupArn) {
   } catch (error) {
     console.error(`❌ Error fetching Rule Group ${ruleGroupArn}:`, error);
     return null;
+  }
+}
+
+// Function to fetch CloudWatch logs
+async function fetchCloudWatchLogs(logGroupName, logStreamName, limit = 1000) {
+  try {
+    console.log(`🔍 Fetching logs from ${logGroupName}/${logStreamName}`);
+    const command = new GetLogEventsCommand({
+      logGroupName,
+      logStreamName,
+      limit,
+      startFromHead: false  // Get most recent logs first
+    });
+    console.log(command);
+    
+
+    const response = await cloudWatchClient.send(command);
+    console.log(`✅ Retrieved ${response.events.length} log events`);
+    return response.events;
+  } catch (error) {
+    console.error("❌ Error fetching CloudWatch logs:", error);
+    throw error;
   }
 }
 
@@ -107,6 +134,41 @@ app.get("/api/waf-acls", async (req, res) => {
   } catch (error) {
     console.error("❌ Error fetching WAF data:", error);
     res.status(500).json({ error: "Error fetching WAF ACLs" });
+  }
+});
+
+// API Endpoint: Get CloudWatch Logs
+app.get("/api/logs", async (req, res) => {
+  const { logGroupName, logStreamName, limit } = req.query;
+
+  if (!logGroupName || !logStreamName) {
+    return res.status(400).json({ 
+      error: "Missing required parameters: logGroupName and logStreamName" 
+    });
+  }
+
+  try {
+    const logs = await fetchCloudWatchLogs(
+      logGroupName, 
+      logStreamName, 
+      limit ? Math.min(parseInt(limit), 1000) : 1000
+    );
+
+    res.json({
+      logGroupName,
+      logStreamName,
+      events: logs.map(log => ({
+        timestamp: log.timestamp,
+        message: log.message,
+        ingestionTime: log.ingestionTime
+      }))
+    });
+  } catch (error) {
+    console.error("❌ Error in /api/cloudwatch-logs:", error);
+    res.status(500).json({ 
+      error: "Failed to fetch CloudWatch logs",
+      details: error.message 
+    });
   }
 });
 

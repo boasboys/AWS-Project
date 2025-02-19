@@ -63,6 +63,10 @@ function buildSubRuleChain(parentNodeId, ruleGroup, nodes, edges) {
         background: "#fbbf24", // orange
         padding: 10,
         borderRadius: 8,
+        width: "auto",
+        minWidth: 200,
+        textAlign: "center",
+        whiteSpace: "pre-wrap"
       },
     });
 
@@ -84,6 +88,10 @@ function buildSubRuleChain(parentNodeId, ruleGroup, nodes, edges) {
         background: "#fde047", // yellow
         padding: 10,
         borderRadius: 8,
+        width: "auto",
+        minWidth: 150,
+        textAlign: "center",
+        whiteSpace: "pre-wrap"
       },
     });
     edges.push({
@@ -106,6 +114,10 @@ function buildSubRuleChain(parentNodeId, ruleGroup, nodes, edges) {
           color: "#fff",
           padding: 10,
           borderRadius: 8,
+          width: "auto",
+          minWidth: 200,
+          textAlign: "center",
+          whiteSpace: "pre-wrap"
         },
       });
       edges.push({
@@ -147,6 +159,10 @@ function buildTopLevelRuleChain(acl, nodes, edges) {
       color: "#fff",
       padding: 10,
       borderRadius: 8,
+      width: "auto",
+      minWidth: 200,
+      textAlign: "center",
+      whiteSpace: "pre-wrap"
     },
   });
 
@@ -167,6 +183,10 @@ function buildTopLevelRuleChain(acl, nodes, edges) {
         background: "#fbbf24",
         padding: 10,
         borderRadius: 8,
+        width: "auto",
+        minWidth: 200,
+        textAlign: "center",
+        whiteSpace: "pre-wrap"
       },
     });
     // Edge from previous diamond to this diamond
@@ -188,6 +208,10 @@ function buildTopLevelRuleChain(acl, nodes, edges) {
         background: "#fde047",
         padding: 10,
         borderRadius: 8,
+        width: "auto",
+        minWidth: 150,
+        textAlign: "center",
+        whiteSpace: "pre-wrap"
       },
     });
     edges.push({
@@ -210,6 +234,10 @@ function buildTopLevelRuleChain(acl, nodes, edges) {
           color: "#fff",
           padding: 10,
           borderRadius: 8,
+          width: "auto",
+          minWidth: 200,
+          textAlign: "center",
+          whiteSpace: "pre-wrap"
         },
       });
       edges.push({
@@ -249,6 +277,10 @@ function buildTopLevelRuleChain(acl, nodes, edges) {
       color: "#fff",
       padding: 10,
       borderRadius: 8,
+      width: "auto",
+      minWidth: 200,
+      textAlign: "center",
+      whiteSpace: "pre-wrap"
     },
   });
   edges.push({
@@ -298,15 +330,17 @@ export default function WafTreeIfElseAutoLayout() {
       {acls.map((acl, idx) => {
         const { nodes, edges } = generateFlow(acl);
         return (
-          <Paper key={acl.Id || idx} style={{ height: 1000, marginTop: 40, padding: 10 }}>
+          <React.Fragment key={acl.Id || idx}>
             <Typography variant="h6">
               {acl.Name} - Detailed Short‐Circuit Flow
             </Typography>
-            <ReactFlow nodes={nodes} edges={edges} fitView>
-              <Background />
-              <Controls />
-            </ReactFlow>
-          </Paper>
+            <Paper style={{ height: 1000, marginTop: 40, padding: 10 }}>
+              <ReactFlow nodes={nodes} edges={edges} fitView>
+                <Background />
+                <Controls />
+              </ReactFlow>
+            </Paper>
+          </React.Fragment>
         );
       })}
     </Container>

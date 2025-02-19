@@ -41,14 +41,18 @@ function addRuleGroupNodes(ruleGroup, parentId, startY, nodes, edges) {
     nodes.push({
       id: nodeId,
       data: {
-        label: `Rule: ${subRule.Name} (Priority: ${subRule.Priority}) | Action: ${actionLabel}`
+        label: `Rule: ${subRule.Name}\nPriority: ${subRule.Priority}\nAction: ${actionLabel}`
       },
       position: { x: 550, y: yOffset },
-      style: { 
-        background: "#4682B4", 
-        padding: 10, 
-        borderRadius: 10, 
-        color: "#fff" 
+      style: {
+        background: "#4682B4",
+        padding: 10,
+        borderRadius: 10,
+        color: "#fff",
+        width: "auto",
+        minWidth: 300,
+        textAlign: "center",
+        whiteSpace: "pre-wrap"
       }
     });
 
@@ -87,11 +91,15 @@ function generateFlowDiagram(acl) {
     id: aclNodeId,
     data: { label: `ACL: ${acl.Name} | DefaultAction: ${Object.keys(acl.DefaultAction)[0]}` },
     position: { x: 100, y: 50 },
-    style: { 
-      background: "#4682B4", 
-      padding: 10, 
-      borderRadius: 10, 
-      color: "#fff" 
+    style: {
+      background: "#4682B4",
+      padding: 10,
+      borderRadius: 10,
+      color: "#fff",
+      width: "auto",
+      minWidth: 300,
+      textAlign: "center",
+      whiteSpace: "pre-wrap"
     }
   });
 
@@ -103,10 +111,18 @@ function generateFlowDiagram(acl) {
     nodes.push({
       id: ruleNodeId,
       data: {
-        label: `Rule: ${rule.Name} (Priority: ${rule.Priority}) | Action: ${ruleAction}`
+        label: `Rule: ${rule.Name}\nPriority: ${rule.Priority}\nAction: ${ruleAction}`
       },
       position: { x: 100, y: yOffset },
-      style: { background: "#87CEEB", padding: 10, borderRadius: 10 }
+      style: { 
+        background: "#87CEEB", 
+        padding: 10, 
+        borderRadius: 10,
+        width: "auto",
+        minWidth: 300,
+        textAlign: "center",
+        whiteSpace: "pre-wrap"
+      }
     });
 
     // Edge from ACL node to this rule
@@ -166,15 +182,17 @@ const WafTree = () => {
       {wafAcls.map((acl, index) => {
         const { nodes, edges } = generateFlowDiagram(acl);
         return (
-          <Paper key={acl.Id || index} style={{ padding: 10, marginTop: 20, height: 700 }}>
+          <>
             <Typography variant="h6" gutterBottom>
               ACL Name: {acl.Name}
             </Typography>
-            <ReactFlow nodes={nodes} edges={edges} fitView>
-              <Background />
-              <Controls />
-            </ReactFlow>
-          </Paper>
+            <Paper key={acl.Id || index} style={{ padding: 10, marginTop: 20, height: 700 }}>
+              <ReactFlow nodes={nodes} edges={edges} fitView>
+                <Background />
+                <Controls />
+              </ReactFlow>
+            </Paper>
+          </>
         );
       })}
     </Container>
