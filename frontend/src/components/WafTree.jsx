@@ -135,7 +135,7 @@ const WafTree = () => {
   useEffect(() => {
     const fetchWafAcls = async () => {
       try {
-        const response = await axios.get("http://localhost:5000/api/waf-acls");
+        const response = await axios.get("http://localhost:5060/api/waf-acls");
         setWafAcls(response.data);
       } catch (error) {
         console.error("Error fetching WAF ACLs:", error);

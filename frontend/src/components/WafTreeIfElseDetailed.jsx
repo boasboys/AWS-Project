@@ -278,7 +278,7 @@ export default function WafTreeIfElseAutoLayout() {
 
   useEffect(() => {
     axios
-      .get("http://localhost:5000/api/waf-acls")
+      .get("http://localhost:5060/api/waf-acls")
       .then((res) => setAcls(res.data))
       .catch((err) => console.error("Error fetching WAF ACLs:", err))
       .finally(() => setLoading(false));
