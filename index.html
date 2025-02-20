@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WAF Rule Hierarchy – Complex with Final Outcomes</title>
+  
+  <!-- Cytoscape.js Core -->
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.23.0/dist/cytoscape.min.js"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f9f9f9;
+    }
+    header {
+      background-color: #3f51b5;
+      color: white;
+      padding: 15px;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    #legend {
+      max-width: 800px;
+      margin: 10px auto;
+      font-size: 14px;
+      text-align: center;
+    }
+    #legend span {
+      display: inline-block;
+      margin: 0 15px;
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #cy {
+      width: 800px;
+      height: 900px;
+      margin: 20px auto;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    #controls {
+      text-align: center;
+      margin: 10px auto;
+    }
+    button {
+      background-color: #3f51b5;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background-color: #303f9f;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>WAF Rule Hierarchy – Complex with Final Outcomes</h1>
+  </header>
+
+  <div id="legend">
+    <strong>Legend:</strong>
+    <span style="background-color: #f8bbd0;">Label</span>
+    <span style="background-color: #dcedc8;">Count</span>
+    <span style="background-color: #ff6b6b;">Block</span>
+    <span style="background-color: #cc0000;">FINAL BLOCK</span>
+    <span style="background-color: #00aa44;">FINAL PASS</span>
+  </div>
+
+  <div id="controls">
+    <button id="reset">Reset View</button>
+  </div>
+
+  <div id="cy"></div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function(){
+      /* 
+        Revised Dependency Structure:
+        
+        Level 1 (6 rules – all Label):
+          • rule1: Detect SQL Injection Attacks  
+          • rule2: Detect Cross-Site Scripting  
+          • rule3: Monitor API Abuse Patterns  
+          • rule4: Inspect Traffic Anomalies  
+          • rule5: Identify Suspicious Login Attempts  
+          • rule6: Detect Bot Activity  
+        
+        Level 2 (4 rules – all Count):
+          • rule7: Analyze SQL/XSS Indicators (depends on rule1 & rule2)  
+          • rule8: Evaluate API Abuse (depends on rule3)  
+          • rule9: Review Traffic Anomalies (depends on rule4)  
+          • rule10: Correlate Login & Bot Patterns (depends on rule5 & rule6)  
+        
+        Level 3 (5 rules – mixed Label/Count):
+          • rule11: Advanced SQL Injection Check (Label; depends on rule7)  
+          • rule12: Enhanced XSS Detection (Label; depends on rule7)  
+          • rule13: Secondary API Abuse Check (Count; depends on rule8)  
+          • rule14: Anomaly Verification (Label; depends on rule9)  
+          • rule15: Combined Login/Bot Analysis (Count; depends on rule10)  
+        
+        Level 4 (3 rules – mixed):
+          • rule16: Threat Consolidation (Count; depends on rule11, rule12, rule13)  
+          • rule17: Session Isolation (Label; depends on rule14, rule15)  
+          • rule18: Risk Aggregation (Count; depends on rule16, rule17)  
+        
+        Level 5 (2 rules – final aggregation):
+          • rule19: Final Identity Challenge (Block; depends on rule18)  ← triggers BLOCK outcome  
+          • rule20: Final Integrity Check (Count; depends on rule17)      ← triggers PASS outcome  
+        
+        Final Outcome Nodes (Level 6):
+          • FINAL_BLOCK (Block) receives direct edge from rule19  
+          • FINAL_PASS (Pass) receives direct edge from rule20  
+      */
+      
+      const wafRules = [
+        // Level 1
+        { id: "rule1", label: "Detect SQL Injection Attacks", action: "Label", level: 1 },
+        { id: "rule2", label: "Detect Cross-Site Scripting", action: "Label", level: 1 },
+        { id: "rule3", label: "Monitor API Abuse Patterns", action: "Label", level: 1 },
+        { id: "rule4", label: "Inspect Traffic Anomalies", action: "Label", level: 1 },
+        { id: "rule5", label: "Identify Suspicious Login Attempts", action: "Label", level: 1 },
+        { id: "rule6", label: "Detect Bot Activity", action: "Label", level: 1 },
+        // Level 2
+        { id: "rule7", label: "Analyze SQL/XSS Indicators", action: "Count", dependsOn: ["rule1", "rule2"], level: 2 },
+        { id: "rule8", label: "Evaluate API Abuse", action: "Count", dependsOn: ["rule3"], level: 2 },
+        { id: "rule9", label: "Review Traffic Anomalies", action: "Count", dependsOn: ["rule4"], level: 2 },
+        { id: "rule10", label: "Correlate Login & Bot Patterns", action: "Count", dependsOn: ["rule5", "rule6"], level: 2 },
+        // Level 3
+        { id: "rule11", label: "Advanced SQL Injection Check", action: "Label", dependsOn: ["rule7"], level: 3 },
+        { id: "rule12", label: "Enhanced XSS Detection", action: "Label", dependsOn: ["rule7"], level: 3 },
+        { id: "rule13", label: "Secondary API Abuse Check", action: "Count", dependsOn: ["rule8"], level: 3 },
+        { id: "rule14", label: "Anomaly Verification", action: "Label", dependsOn: ["rule9"], level: 3 },
+        { id: "rule15", label: "Combined Login/Bot Analysis", action: "Count", dependsOn: ["rule10"], level: 3 },
+        // Level 4
+        { id: "rule16", label: "Threat Consolidation", action: "Count", dependsOn: ["rule11", "rule12", "rule13"], level: 4 },
+        { id: "rule17", label: "Session Isolation", action: "Label", dependsOn: ["rule14", "rule15"], level: 4 },
+        { id: "rule18", label: "Risk Aggregation", action: "Count", dependsOn: ["rule16", "rule17"], level: 4 },
+        // Level 5
+        { id: "rule19", label: "Final Identity Challenge", action: "Block", dependsOn: ["rule18"], level: 5 },
+        { id: "rule20", label: "Final Integrity Check", action: "Count", dependsOn: ["rule17"], level: 5 }
+      ];
+      
+      // Final Outcome Nodes at Level 6:
+      const finalBlock = { id: "FINAL_BLOCK", label: "⛔ FINAL BLOCK ⛔", action: "Block", level: 6 };
+      const finalPass  = { id: "FINAL_PASS", label: "✅ FINAL PASS ✅", action: "Pass", level: 6 };
+      
+      // Group nodes by level.
+      const levels = {};
+      wafRules.forEach(rule => {
+        if (!levels[rule.level]) levels[rule.level] = [];
+        levels[rule.level].push(rule);
+      });
+      if (!levels[finalBlock.level]) levels[finalBlock.level] = [];
+      levels[finalBlock.level].push(finalBlock);
+      if (!levels[finalPass.level]) levels[finalPass.level] = [];
+      levels[finalPass.level].push(finalPass);
+      
+      // Compute positions (container width 800px, vertical spacing 120px).
+      const containerWidth = 800;
+      const verticalSpacing = 120;
+      const cyNodes = [];
+      Object.keys(levels).forEach(lvl => {
+        const levelNum = parseInt(lvl);
+        const nodesInLevel = levels[lvl];
+        const count = nodesInLevel.length;
+        nodesInLevel.forEach((node, i) => {
+          const x = containerWidth * (i + 1) / (count + 1);
+          const y = levelNum * verticalSpacing;
+          node.position = { x, y };
+          cyNodes.push({
+            data: {
+              id: node.id,
+              label: `${node.id.toUpperCase()}: ${node.label} (${node.action})`,
+              action: node.action
+            },
+            position: node.position
+          });
+        });
+      });
+      
+      // Build edges based on dependencies.
+      const cyEdges = [];
+      wafRules.forEach(rule => {
+        if (rule.dependsOn) {
+          rule.dependsOn.forEach(depId => {
+            cyEdges.push({ data: { source: depId, target: rule.id } });
+          });
+        }
+      });
+      // Final outcome edges:
+      // rule19 (Block) → FINAL_BLOCK
+      // rule20 (Count → pass branch) → FINAL_PASS
+      cyEdges.push({ data: { source: "rule19", target: finalBlock.id, direct: true } });
+      cyEdges.push({ data: { source: "rule20", target: finalPass.id, direct: true } });
+      
+      const cy = cytoscape({
+        container: document.getElementById("cy"),
+        elements: {
+          nodes: cyNodes,
+          edges: cyEdges
+        },
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'label': 'data(label)',
+              'text-valign': 'center',
+              'text-halign': 'center',
+              'text-wrap': 'wrap',
+              'text-max-width': '90px',
+              'width': '100px',
+              'height': '40px',
+              'border-color': '#888',
+              'border-width': 2,
+              'font-size': '10px',
+              'shape': 'round-rectangle'
+            }
+          },
+          {
+            selector: 'node[action="Label"]',
+            style: { 'background-color': '#f8bbd0' }
+          },
+          {
+            selector: 'node[action="Count"]',
+            style: { 'background-color': '#dcedc8' }
+          },
+          {
+            selector: 'node[action="Block"]',
+            style: { 'background-color': '#ff6b6b' }
+          },
+          {
+            selector: 'node[action="Pass"]',
+            style: { 'background-color': '#00aa44' }
+          },
+          {
+            selector: '#FINAL_BLOCK',
+            style: {
+              'background-color': '#cc0000',
+              'border-color': '#990000',
+              'font-weight': 'bold',
+              'width': '70px',
+              'height': '70px'
+            }
+          },
+          {
+            selector: '#FINAL_PASS',
+            style: {
+              'background-color': '#00aa44',
+              'border-color': '#008833',
+              'font-weight': 'bold',
+              'width': '70px',
+              'height': '70px'
+            }
+          },
+          {
+            selector: 'edge[direct]',
+            style: {
+              'line-color': '#ff0000',
+              'width': 3,
+              'target-arrow-color': '#ff0000',
+              'curve-style': 'bezier'
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 2,
+              'line-color': '#555',
+              'target-arrow-shape': 'triangle',
+              'target-arrow-color': '#555',
+              'curve-style': 'bezier'
+            }
+          }
+        ],
+        layout: { name: 'preset' }
+      });
+      
+      document.getElementById("reset").addEventListener("click", function() {
+        cy.fit();
+      });
+      
+      cy.fit();
+    });
+  </script>
+</body>
+</html>
