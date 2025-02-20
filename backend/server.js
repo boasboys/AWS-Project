@@ -1,70 +1,181 @@
 import express from "express";
 import cors from "cors";
-import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand, GetRuleGroupCommand } from "@aws-sdk/client-wafv2";
 
 const app = express();
-const PORT = 5000;
-
-// AWS WAF Client
-const wafClient = new WAFV2Client({
-  region: "us-east-1",
-});
+const PORT = 5060;
 
 app.use(cors());
 
-// Function to fetch all Web ACLs
+// 🔥 Fake Web ACLs using your provided SampleRuleSet
+const fakeAcls = [
+  {
+    Id: "fake-acl-1",
+    Name: "MockWebACL-1",
+    Description: "This is a fake Web ACL with SampleRuleSet",
+    Rules: [
+      {
+        Name: "rule1",
+        Priority: 0,
+        Statement: {
+          ByteMatchStatement: {
+            SearchString: "/path1/",
+            FieldToMatch: {
+              UriPath: {}
+            },
+            TextTransformations: [
+              {
+                Priority: 0,
+                Type: "NONE"
+              }
+            ],
+            PositionalConstraint: "STARTS_WITH"
+          }
+        },
+        Action: {
+          Count: {}
+        },
+        RuleLabels: [
+          {
+            Name: "label_rule1"
+          }
+        ],
+        VisibilityConfig: {
+          SampledRequestsEnabled: true,
+          CloudWatchMetricsEnabled: true,
+          MetricName: "metric_rule1"
+        }
+      },
+      {
+        Name: "rule2",
+        Priority: 1,
+        Statement: {
+          ByteMatchStatement: {
+            SearchString: "/path2/",
+            FieldToMatch: {
+              UriPath: {}
+            },
+            TextTransformations: [
+              {
+                Priority: 0,
+                Type: "NONE"
+              }
+            ],
+            PositionalConstraint: "STARTS_WITH"
+          }
+        },
+        Action: {
+          Count: {}
+        },
+        RuleLabels: [
+          {
+            Name: "label_rule2"
+          }
+        ],
+        VisibilityConfig: {
+          SampledRequestsEnabled: true,
+          CloudWatchMetricsEnabled: true,
+          MetricName: "metric_rule2"
+        }
+      },
+      {
+        Name: "rule3",
+        Priority: 2,
+        Statement: {
+          RateBasedStatement: {
+            Limit: 100,
+            EvaluationWindowSec: 60,
+            AggregateKeyType: "IP",
+            ScopeDownStatement: {
+              NotStatement: {
+                Statement: {
+                  LabelMatchStatement: {
+                    Scope: "LABEL",
+                    Key: "label_rule1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        Action: {
+          Count: {
+            CustomRequestHandling: {
+              InsertHeaders: [
+                {
+                  Name: "custom-header",
+                  Value: "true"
+                }
+              ]
+            }
+          }
+        },
+        RuleLabels: [
+          {
+            Name: "label_rule3"
+          }
+        ],
+        VisibilityConfig: {
+          SampledRequestsEnabled: true,
+          CloudWatchMetricsEnabled: true,
+          MetricName: "metric_rule3"
+        }
+      },
+      {
+        Name: "rule4",
+        Priority: 3,
+        Statement: {
+          ByteMatchStatement: {
+            SearchString: "/path4/",
+            FieldToMatch: {
+              UriPath: {}
+            },
+            TextTransformations: [
+              {
+                Priority: 0,
+                Type: "NONE"
+              }
+            ],
+            PositionalConstraint: "STARTS_WITH"
+          }
+        },
+        Action: {
+          Count: {}
+        },
+        RuleLabels: [
+          {
+            Name: "label_rule4"
+          }
+        ],
+        VisibilityConfig: {
+          SampledRequestsEnabled: true,
+          CloudWatchMetricsEnabled: true,
+          MetricName: "metric_rule4"
+        }
+      }
+    ]
+  }
+];
+
+// Function to return fake ACLs
 async function listWafAcls() {
-  try {
-    console.log("🔍 Fetching WAF ACLs from AWS...");
-    const command = new ListWebACLsCommand({ Scope: "CLOUDFRONT" });
-    const response = await wafClient.send(command);
-
-    console.log("✅ AWS Response for listWebACLs:", JSON.stringify(response, null, 2));
-    return response.WebACLs || [];
-  } catch (error) {
-    console.error("❌ Error fetching WAF ACLs:", error);
-    return [];
-  }
+  console.log("✅ Returning Fake WAF ACLs");
+  return fakeAcls;
 }
 
-// Function to get details of a specific Web ACL
+// Function to return fake ACL details
 async function getAclDetails(aclId, aclName) {
-  try {
-    console.log(`🔍 Fetching details for ACL: ${aclName} (ID: ${aclId})`);
-    const command = new GetWebACLCommand({ Id: aclId, Name: aclName, Scope: "CLOUDFRONT" });
-    const response = await wafClient.send(command);
-
-    console.log(`✅ Details for ACL ${aclName}:`, JSON.stringify(response, null, 2));
-    return response.WebACL || null;
-  } catch (error) {
-    console.error(`❌ Error fetching details for ACL ${aclName}:`, error);
-    return null;
-  }
+  console.log(`✅ Returning Fake ACL Details for: ${aclName} (ID: ${aclId})`);
+  return fakeAcls.find((acl) => acl.Id === aclId) || null;
 }
 
-// Function to fetch rule group details (fetches sub-rules)
-async function getRuleGroupDetails(ruleGroupArn) {
-  try {
-    console.log(`🔍 Fetching Rule Group Details for ARN: ${ruleGroupArn}`);
-    const command = new GetRuleGroupCommand({ ARN: ruleGroupArn, Scope: "CLOUDFRONT" });
-    const response = await wafClient.send(command);
-
-    console.log(`✅ Rule Group Details for ${ruleGroupArn}:`, JSON.stringify(response, null, 2));
-    return response.RuleGroup || null;
-  } catch (error) {
-    console.error(`❌ Error fetching Rule Group ${ruleGroupArn}:`, error);
-    return null;
-  }
-}
-
-// API Endpoint: Get WAF ACLs with rules and rule group details
+// API Endpoint: Get Fake WAF ACLs with rules
 app.get("/api/waf-acls", async (req, res) => {
   try {
-    console.log("🚀 API Request: Fetching all WAF ACLs...");
+    console.log("🚀 API Request: Fetching all Fake WAF ACLs...");
     const acls = await listWafAcls();
 
     if (acls.length === 0) {
-      console.warn("⚠️ No WAF ACLs found.");
+      console.warn("⚠️ No Fake WAF ACLs found.");
       return res.json([]);
     }
 
@@ -72,41 +183,17 @@ app.get("/api/waf-acls", async (req, res) => {
 
     const detailedAcls = await Promise.all(
       acls.map(async (acl) => {
-        console.log(`🔍 Processing ACL: ${acl.Name} (ID: ${acl.Id})`);
+        console.log(`🔍 Processing Fake ACL: ${acl.Name} (ID: ${acl.Id})`);
         const details = await getAclDetails(acl.Id, acl.Name);
-
-        if (!details) {
-          console.warn(`⚠️ No details found for ACL: ${acl.Name}`);
-          return acl;
-        }
-
-        // Fetch rule group details for rules referencing a rule group
-        const rulesWithGroups = await Promise.all(
-          details.Rules.map(async (rule, index) => {
-            console.log(`📌 Processing Rule ${index + 1}: ${rule.Name}`);
-
-            if (rule.Statement?.RuleGroupReferenceStatement) {
-              const ruleGroupDetails = await getRuleGroupDetails(
-                rule.Statement.RuleGroupReferenceStatement.ARN
-              );
-              if (ruleGroupDetails) {
-                rule.RuleGroup = ruleGroupDetails;
-              }
-            }
-            return rule;
-          })
-        );
-
-        details.Rules = rulesWithGroups;
-        return details;
+        return details || acl;
       })
     );
 
-    console.log("✅ Final Processed ACL Data:", JSON.stringify(detailedAcls, null, 2));
+    console.log("✅ Final Fake Processed ACL Data:", JSON.stringify(detailedAcls, null, 2));
     res.json(detailedAcls);
   } catch (error) {
-    console.error("❌ Error fetching WAF data:", error);
-    res.status(500).json({ error: "Error fetching WAF ACLs" });
+    console.error("❌ Error fetching Fake WAF data:", error);
+    res.status(500).json({ error: "Error fetching Fake WAF ACLs" });
   }
 });
 
