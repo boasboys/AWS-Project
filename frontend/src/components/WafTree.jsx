@@ -5,92 +5,121 @@ import ReactFlow, { Background, Controls } from "reactflow";
 import "reactflow/dist/style.css";
 
 /**
- * Utility to figure out the main action label (Block / Allow / Captcha / None)
- * from either `rule.Action` or `rule.OverrideAction`.
+ * Extract label names that a rule generates
  */
-function getRuleAction(rule) {
-  // If a top-level rule has `Action`, use that
-  if (rule.Action) {
-    const actionKey = Object.keys(rule.Action)[0]; // e.g. "Block" / "Allow" / "Captcha" ...
-    return actionKey;
-  }
-  // Otherwise check if there's an OverrideAction (like "None")
-  if (rule.OverrideAction) {
-    const overrideKey = Object.keys(rule.OverrideAction)[0]; // e.g. "None"
-    return overrideKey;
-  }
-  return "None";
+function getGeneratedLabels(rule) {
+  return (rule.RuleLabels || []).map(label => label.Name);
 }
 
 /**
- * Build up nodes/edges for a single RuleGroup’s sub-rules recursively.
- *
- * @param {Object} ruleGroup - The `RuleGroup` object (with `Rules` array).
- * @param {string} parentId - The node ID we’ll connect from.
- * @param {number} startY - The vertical position to start placing sub-rules.
- * @param {Array} nodes - Existing node array to push onto.
- * @param {Array} edges - Existing edge array to push onto.
- * @returns {number} new Y offset after we place all sub-rules
+ * Extract label dependencies for a rule
  */
-function addRuleGroupNodes(ruleGroup, parentId, startY, nodes, edges) {
-  let yOffset = startY;
-  // For each sub-rule in the group:
-  ruleGroup.Rules?.forEach((subRule, subIndex) => {
-    const actionLabel = getRuleAction(subRule);
-    const nodeId = `subrule-${ruleGroup.Name}-${subRule.Name}-${subIndex}`;
-    nodes.push({
-      id: nodeId,
-      data: {
-        label: `Rule: ${subRule.Name}\nPriority: ${subRule.Priority}\nAction: ${actionLabel}`
-      },
-      position: { x: 550, y: yOffset },
-      style: {
-        background: "#4682B4",
-        padding: 10,
-        borderRadius: 10,
-        color: "#fff",
-        width: "auto",
-        minWidth: 300,
-        textAlign: "center",
-        whiteSpace: "pre-wrap"
+function getLabelDependencies(rule) {
+  if (!rule.Statement) return [];
+  
+  const deps = [];
+  
+  // Check for direct label match statements
+  if (rule.Statement.LabelMatchStatement) {
+    deps.push(rule.Statement.LabelMatchStatement.Key);
+  }
+  
+  // Check for AND/OR statements that might contain label matches
+  if (rule.Statement.AndStatement) {
+    rule.Statement.AndStatement.Statements.forEach(stmt => {
+      if (stmt.LabelMatchStatement) {
+        deps.push(stmt.LabelMatchStatement.Key);
+      }
+    });
+  }
+  
+  return deps;
+}
+
+/**
+ * Group rules by their dependency level
+ */
+function organizeRulesByDependency(rules) {
+  const rulesByLevel = [];
+  const processed = new Map(); // Changed to Map to store level information
+  const labelToRule = new Map();
+
+  // Build map of labels to rules that generate them
+  rules.forEach(rule => {
+    getGeneratedLabels(rule).forEach(label => {
+      labelToRule.set(label, rule);
+    });
+  });
+
+  // Helper to find the highest level of any dependency
+  const getMaxDependencyLevel = (rule) => {
+    const deps = getLabelDependencies(rule);
+    if (deps.length === 0) return -1;
+
+    let maxLevel = -1;
+    deps.forEach(dep => {
+      const sourceRule = labelToRule.get(dep);
+      if (sourceRule && processed.has(sourceRule.Name)) {
+        maxLevel = Math.max(maxLevel, processed.get(sourceRule.Name));
+      }
+    });
+    return maxLevel;
+  };
+
+  // Helper to check if rule can be added to current level
+  const canAddToLevel = (rule, currentLevel) => {
+    const deps = getLabelDependencies(rule);
+    if (deps.length === 0) return currentLevel === 0;
+
+    // Check if all dependencies are in previous levels
+    const maxDependencyLevel = getMaxDependencyLevel(rule);
+    return maxDependencyLevel !== -1 && currentLevel > maxDependencyLevel;
+  };
+
+  // Build levels
+  let remainingRules = [...rules];
+  let currentLevel = 0;
+  
+  while (remainingRules.length > 0) {
+    const levelRules = [];
+    const nextRemainingRules = [];
+
+    remainingRules.forEach(rule => {
+      if (canAddToLevel(rule, currentLevel)) {
+        levelRules.push(rule);
+        processed.set(rule.Name, currentLevel);
+      } else {
+        nextRemainingRules.push(rule);
       }
     });
 
-    // Edge from the parent to this sub-rule
-    edges.push({
-      id: `e-${parentId}-${nodeId}`,
-      source: parentId,
-      target: nodeId,
-      animated: true
-    });
-
-    // If this sub-rule also has a nested RuleGroup, recurse:
-    if (subRule.RuleGroup) {
-      yOffset = addRuleGroupNodes(subRule.RuleGroup, nodeId, yOffset + 100, nodes, edges);
-    } else {
-      yOffset += 100;
+    if (levelRules.length > 0) {
+      rulesByLevel.push(levelRules);
+      currentLevel++;
+    } else if (nextRemainingRules.length > 0) {
+      // If we can't add any rules but still have remaining ones,
+      // force add them to prevent infinite loops
+      rulesByLevel.push(nextRemainingRules);
+      break;
     }
-  });
 
-  return yOffset;
+    remainingRules = nextRemainingRules;
+  }
+
+  return rulesByLevel;
 }
 
-/**
- * Builds the flow diagram for a single ACL:
- * 1. Create a root ACL node
- * 2. For each top-level rule, add a node
- * 3. If it references a RuleGroup, recursively add sub-rules
- */
 function generateFlowDiagram(acl) {
   const nodes = [];
   const edges = [];
+  const nodeMap = new Map(); // Keep track of node IDs for connections
 
   // Root ACL node
   const aclNodeId = `acl-${acl.Id}`;
   nodes.push({
     id: aclNodeId,
-    data: { label: `ACL: ${acl.Name} | DefaultAction: ${Object.keys(acl.DefaultAction)[0]}` },
-    position: { x: 100, y: 50 },
+    data: { label: `ACL: ${acl.Name}\nDefaultAction: ${Object.keys(acl.DefaultAction)[0]}` },
+    position: { x: 400, y: 0 },
     style: {
       background: "#4682B4",
       padding: 10,
@@ -103,42 +132,88 @@ function generateFlowDiagram(acl) {
     }
   });
 
-  let yOffset = 200;
-  acl.Rules?.forEach((rule, ruleIndex) => {
-    const ruleAction = getRuleAction(rule);
-    const ruleNodeId = `rule-${acl.Id}-${ruleIndex}`;
+  const ruleLevels = organizeRulesByDependency(acl.Rules || []);
+  const VERTICAL_SPACING = 200;  // Increased for better readability
+  const HORIZONTAL_SPACING = 400; // Increased for better spacing
 
-    nodes.push({
-      id: ruleNodeId,
-      data: {
-        label: `Rule: ${rule.Name}\nPriority: ${rule.Priority}\nAction: ${ruleAction}`
-      },
-      position: { x: 100, y: yOffset },
-      style: { 
-        background: "#87CEEB", 
-        padding: 10, 
-        borderRadius: 10,
-        width: "auto",
-        minWidth: 300,
-        textAlign: "center",
-        whiteSpace: "pre-wrap"
+  ruleLevels.forEach((levelRules, levelIndex) => {
+    const y = (levelIndex + 1) * VERTICAL_SPACING;
+    
+    levelRules.forEach((rule, ruleIndex) => {
+      const x = ((ruleIndex - (levelRules.length - 1) / 2) * HORIZONTAL_SPACING) + 400;
+      const ruleNodeId = `rule-${rule.Name}-${levelIndex}-${ruleIndex}`;
+      const action = rule.Action ? Object.keys(rule.Action)[0] : 
+                    rule.OverrideAction ? Object.keys(rule.OverrideAction)[0] : 'None';
+
+      // Get generated labels and dependencies
+      const generatedLabels = getGeneratedLabels(rule);
+      const dependentLabels = getLabelDependencies(rule);
+      
+      // Create enhanced label with label information
+      const labelText = [
+        `Rule: ${rule.Name}`,
+        `Priority: ${rule.Priority}`,
+        `Action: ${action}`,
+        generatedLabels.length > 0 ? `Generates Labels: ${generatedLabels.join(", ")}` : null,
+        dependentLabels.length > 0 ? `Depends on Labels: ${dependentLabels.join(", ")}` : null
+      ].filter(Boolean).join("\n");
+
+      nodes.push({
+        id: ruleNodeId,
+        data: { label: labelText },
+        position: { x, y },
+        style: {
+          background: generatedLabels.length > 0 ? "#90EE90" : "#87CEEB", // Green for rules that generate labels
+          padding: 10,
+          borderRadius: 10,
+          width: "auto",
+          minWidth: 300,
+          textAlign: "center",
+          whiteSpace: "pre-wrap",
+          fontSize: "12px"
+        }
+      });
+
+      // Store node in map for edge creation
+      nodeMap.set(rule.Name, ruleNodeId);
+
+      // Connect to ACL if it's the first level
+      if (levelIndex === 0) {
+        edges.push({
+          id: `e-acl-${ruleNodeId}`,
+          source: aclNodeId,
+          target: ruleNodeId,
+          animated: true,
+          style: { stroke: "#4682B4" }
+        });
       }
     });
+  });
 
-    // Edge from ACL node to this rule
-    edges.push({
-      id: `e-acl-rule-${ruleIndex}`,
-      source: aclNodeId,
-      target: ruleNodeId,
-      animated: true
+  // Create edges for label dependencies after all nodes are created
+  acl.Rules.forEach(rule => {
+    const deps = getLabelDependencies(rule);
+    const targetNodeId = nodeMap.get(rule.Name);
+    
+    deps.forEach(dep => {
+      // Find the rule that generates this label
+      const sourceRule = acl.Rules.find(r => 
+        (r.RuleLabels || []).some(label => label.Name === dep)
+      );
+      
+      if (sourceRule && nodeMap.has(sourceRule.Name)) {
+        const sourceNodeId = nodeMap.get(sourceRule.Name);
+        edges.push({
+          id: `e-${sourceNodeId}-${targetNodeId}`,
+          source: sourceNodeId,
+          target: targetNodeId,
+          animated: true,
+          label: `Uses ${dep}`,
+          style: { stroke: "#FF6B6B" },
+          labelStyle: { fill: "#FF6B6B", fontSize: 12 }
+        });
+      }
     });
-
-    // If the rule references a nested RuleGroup, add its sub-rules
-    if (rule.RuleGroup) {
-      yOffset = addRuleGroupNodes(rule.RuleGroup, ruleNodeId, yOffset + 100, nodes, edges);
-    } else {
-      yOffset += 150;
-    }
   });
 
   return { nodes, edges };
