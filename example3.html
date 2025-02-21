@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WAF Visualizer | Visualize & Optimize AWS WAF ACL Rules</title>
+  <style>
+    /* Reset & Global Styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #121212;
+      color: #fff;
+      line-height: 1.6;
+    }
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    /* Header & Navigation */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: #1f1f1f;
+      padding: 20px 40px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 1.8rem;
+      color: #0fc;
+    }
+    nav a {
+      margin-left: 20px;
+      font-size: 1rem;
+      color: #fff;
+      transition: color 0.3s;
+    }
+    nav a:hover {
+      color: #0fc;
+    }
+    
+    /* Hero Section */
+    .hero {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: linear-gradient(135deg, #0a0a0a, #222);
+      padding: 0 20px;
+      margin-top: 80px; /* header height offset */
+    }
+    .hero h2 {
+      font-size: 3rem;
+      margin-bottom: 20px;
+      color: #0fc;
+    }
+    .hero p {
+      font-size: 1.2rem;
+      margin-bottom: 40px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .cta {
+      background: #0fc;
+      color: #121212;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .cta:hover {
+      background: #0aa;
+    }
+    
+    /* Features Section */
+    .features {
+      padding: 60px 20px;
+      background: #1a1a1a;
+      text-align: center;
+    }
+    .features h3 {
+      font-size: 2.2rem;
+      margin-bottom: 40px;
+      color: #0fc;
+    }
+    .feature-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+    }
+    .feature {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      width: 280px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      transition: transform 0.3s;
+    }
+    .feature:hover {
+      transform: translateY(-5px);
+    }
+    .feature h4 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    .feature p {
+      font-size: 1rem;
+      color: #ccc;
+      line-height: 1.5;
+    }
+    
+    /* Demo / Testimonial Section */
+    .demo {
+      padding: 60px 20px;
+      background: #121212;
+      text-align: center;
+    }
+    .demo h3 {
+      font-size: 2.2rem;
+      margin-bottom: 20px;
+      color: #0fc;
+    }
+    .demo p {
+      font-size: 1rem;
+      margin-bottom: 30px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      color: #aaa;
+    }
+    
+    /* Footer */
+    footer {
+      background: #1f1f1f;
+      padding: 20px 40px;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #777;
+    }
+    
+    /* Modal Popup (Card-Inspired) */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 3000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.6);
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .modal-content {
+      background-color: #f7f7f9;
+      margin: 8% auto;
+      padding: 30px 40px;
+      border: 2px solid #007bff;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      animation: slideDown 0.3s ease;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    
+    @keyframes slideDown {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .modal-card {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .modal-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #dee2e6;
+      margin-bottom: 15px;
+      padding-bottom: 5px;
+    }
+    
+    .modal-card-header h3 {
+      margin: 0;
+      font-size: 22px;
+      color: #343a40;
+    }
+    
+    .modal-close {
+      font-size: 28px;
+      color: #007bff;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    
+    .modal-close:hover {
+      color: #0056b3;
+    }
+    
+    .modal-card-body p {
+      font-size: 14px;
+      color: #495057;
+      line-height: 1.5;
+      margin: 10px 0;
+    }
+    
+    .modal-card-body pre {
+      background-color: #e9ecef;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #495057;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header / Navbar -->
+  <header>
+    <h1>WAF Visualizer</h1>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#demo">Demo</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+  
+  <!-- Hero Section -->
+  <section class="hero">
+    <div>
+      <h2>Visualize & Optimize Your AWS WAF ACL Rules</h2>
+      <p>
+        Our SaaS solution transforms complex AWS WAF ACL configurations into intuitive, interactive diagrams.
+        Easily understand logical dependencies and optimize your firewall to enhance security and efficiency.
+      </p>
+      <a class="cta" href="#demo">Get Started</a>
+    </div>
+  </section>
+  
+  <!-- Features Section -->
+  <section id="features" class="features">
+    <h3>Key Features</h3>
+    <div class="feature-list">
+      <div class="feature">
+        <h4>Interactive Diagrams</h4>
+        <p>Engage with dynamic, zoomable, and drag-and-drop diagrams that clearly display rule dependencies.</p>
+      </div>
+      <div class="feature">
+        <h4>Real-Time & Static Data</h4>
+        <p>Connect your AWS account for live updates or upload your ACL JSON for static analysis—with clear visual indicators.</p>
+      </div>
+      <div class="feature">
+        <h4>Dependency Highlighting</h4>
+        <p>Click a node to highlight its upstream dependencies, revealing the logical flow of rules.</p>
+      </div>
+      <div class="feature">
+        <h4>Onboarding Tour</h4>
+        <p>Step-by-step guided overlays help new users learn how to upload, connect, and interact with the diagram.</p>
+      </div>
+      <div class="feature">
+        <h4>Email Notifications</h4>
+        <p>Receive automated email alerts when your ACL changes, prompting you to log in and review updates.</p>
+      </div>
+      <div class="feature">
+        <h4>Customizable Dashboard</h4>
+        <p>Future-proof your experience with options for live data visualization, filtering, and theme customization.</p>
+      </div>
+    </div>
+  </section>
+  
+  <!-- Demo/Testimonial Section -->
+  <section id="demo" class="demo">
+    <h3>See It in Action</h3>
+    <p>
+      Explore our interactive demo to see how our tool transforms complex WAF rules into clear, actionable visualizations.
+    </p>
+    <a class="cta" href="#signup">Try the Demo</a>
+  </section>
+  
+  <!-- Footer -->
+  <footer id="contact">
+    <p>&copy; 2025 WAF Visualizer. All rights reserved.</p>
+    <p>Email: support@wafvisualizer.com</p>
+  </footer>
+  
+  <!-- Modal Popup for Node Details -->
+  <div id="popup" class="modal">
+    <div class="modal-content">
+      <span class="close" id="modalClose">&times;</span>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+  
+  <script>
+    // Initialize Cytoscape diagram
+    const cyContainer = document.getElementById("cy");
+    
+    // Define 7 rules plus final outcomes using simplified levels.
+    const rules = [
+      // Level 1
+      { id: "PathRule1", label: "Matches /api/admin/", action: "Count", level: 1 },
+      { id: "PathRule2", label: "Matches /api/users/", action: "Count", level: 1 },
+      // Level 2
+      { id: "AdminRateLimit", label: "Rate limit admin requests", action: "Block", level: 2, dependsOn: ["PathRule1"] },
+      { id: "UserRateLimit", label: "Rate limit user requests", action: "Block", level: 2, dependsOn: ["PathRule2"] },
+      // Level 3
+      { id: "BlockRateLimitedUsers", label: "Block rate-limited users", action: "Block", level: 3, dependsOn: ["AdminRateLimit", "UserRateLimit"] },
+      { id: "HighRiskAccess", label: "Block high-risk access (RU, CN, KP)", action: "Block", level: 3, dependsOn: ["PathRule1"] },
+      // Level 4
+      { id: "LogBlocked", label: "Log blocked requests (insert X-Block-Reason)", action: "Count", level: 4, dependsOn: ["BlockRateLimitedUsers", "HighRiskAccess"] }
+    ];
+    
+    // Final outcomes (Level 5)
+    const finalBlock = { id: "FINAL_BLOCK", label: "⛔ FINAL BLOCK ⛔", action: "Block", level: 5 };
+    const finalPass  = { id: "FINAL_PASS", label: "✅ FINAL PASS ✅", action: "Pass", level: 5 };
+    
+    // Group nodes by level.
+    const levels = {};
+    [...rules, finalBlock, finalPass].forEach(rule => {
+      if (!levels[rule.level]) levels[rule.level] = [];
+      levels[rule.level].push(rule);
+    });
+    
+    // Compute positions (preset layout)
+    const horizontalSpacing = 220;
+    const verticalSpacing = 180;
+    const offsetX = 100;
+    const offsetY = 100;
+    const cyNodes = [];
+    
+    Object.keys(levels).forEach(lvl => {
+      const levelNum = parseInt(lvl, 10);
+      const nodesInLevel = levels[lvl];
+      nodesInLevel.forEach((node, i) => {
+        const x = offsetX + i * horizontalSpacing;
+        const y = offsetY + (levelNum - 1) * verticalSpacing;
+        node.position = { x, y };
+        cyNodes.push({
+          data: {
+            id: node.id,
+            label: `${node.id}: ${node.label} (${node.action})`,
+            action: node.action
+          },
+          position: { x, y }
+        });
+      });
+    });
+    
+    // Build edges based on dependencies.
+    const cyEdges = [];
+    rules.forEach(rule => {
+      if (rule.dependsOn) {
+        rule.dependsOn.forEach(depId => {
+          cyEdges.push({ data: { source: depId, target: rule.id } });
+        });
+      }
+    });
+    // Final outcome edges:
+    cyEdges.push({ data: { source: "BlockRateLimitedUsers", target: finalBlock.id, direct: true } });
+    cyEdges.push({ data: { source: "LogBlocked", target: finalPass.id, direct: true } });
+    
+    // Initialize Cytoscape.
+    const cy = cytoscape({
+      container: cyContainer,
+      elements: { nodes: cyNodes, edges: cyEdges },
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'label': 'data(label)',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '110px',
+            'width': '100px',
+            'height': '40px',
+            'border-color': '#888',
+            'border-width': 2,
+            'font-size': '10px',
+            'shape': 'round-rectangle'
+          }
+        },
+        { selector: 'node[action="Label"]', style: { 'background-color': '#f8bbd0' } },
+        { selector: 'node[action="Count"]', style: { 'background-color': '#dcedc8' } },
+        { selector: 'node[action="Block"]', style: { 'background-color': '#ff6b6b' } },
+        { selector: 'node[action="Pass"]', style: { 'background-color': '#00aa44' } },
+        {
+          selector: '#FINAL_BLOCK',
+          style: {
+            'background-color': '#cc0000',
+            'border-color': '#990000',
+            'font-weight': 'bold',
+            'width': '70px',
+            'height': '70px'
+          }
+        },
+        {
+          selector: '#FINAL_PASS',
+          style: {
+            'background-color': '#00aa44',
+            'border-color': '#008833',
+            'font-weight': 'bold',
+            'width': '70px',
+            'height': '70px'
+          }
+        },
+        {
+          selector: 'edge[direct]',
+          style: {
+            'line-color': '#ff0000',
+            'width': 3,
+            'target-arrow-color': '#ff0000',
+            'curve-style': 'bezier'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#555',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#555',
+            'curve-style': 'bezier'
+          }
+        }
+      ],
+      layout: { name: 'preset' }
+    });
+    
+    cy.fit(undefined, 50);
+    cy.center();
+    
+    // Modal Popup Logic (Card-Inspired)
+    const modal = document.getElementById("popup");
+    const modalBody = document.getElementById("modal-body");
+    const modalClose = document.getElementById("modalClose");
+    const closeModal = () => { modal.style.display = "none"; };
+    
+    cy.on("tap", "node", (evt) => {
+      const data = evt.target.data();
+      modalBody.innerHTML = `
+        <div class="modal-card">
+          <div class="modal-card-header">
+            <h3>${data.id}</h3>
+            <span class="modal-close">&times;</span>
+          </div>
+          <div class="modal-card-body">
+            <p><strong>Type:</strong> ${data.action}</p>
+            <p><strong>Details:</strong></p>
+            <pre>${data.label}</pre>
+          </div>
+        </div>
+      `;
+      modal.style.display = "block";
+      const closeBtn = modal.querySelector(".modal-close");
+      if (closeBtn) { closeBtn.onclick = closeModal; }
+    });
+    
+    document.getElementById("resetBtn").onclick = function() {
+      cy.fit(undefined, 50);
+      cy.center();
+    };
+    
+    window.onclick = function(event) {
+      if (event.target === modal) {
+        closeModal();
+      }
+    };
+  </script>
+</body>
+</html>

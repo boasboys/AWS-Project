@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ACL Visualizer - 2025 Futuristic</title>
+  <!-- Google Fonts for a futuristic look -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <!-- Cytoscape JS -->
+  <script src="https://unpkg.com/cytoscape@3.23.0/dist/cytoscape.min.js"></script>
+  <style>
+    /* Global Styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      line-height: 1.6;
+    }
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    /* Header / Navbar */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(10,10,10,0.85);
+      border-bottom: 2px solid #0ff;
+      padding: 20px 40px;
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(10px);
+    }
+    header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.8rem;
+      color: #0ff;
+    }
+    nav a {
+      margin-left: 20px;
+      font-size: 1rem;
+      color: #bbb;
+      transition: color 0.3s;
+    }
+    nav a:hover {
+      color: #0ff;
+    }
+    
+    /* Hero Section */
+    .hero {
+      margin-top: 80px; /* account for fixed header */
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: linear-gradient(135deg, #121212, #1d1d1d);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: url('https://via.placeholder.com/1920x1080?text=2025+Futuristic+Background') center/cover no-repeat;
+      opacity: 0.2;
+      filter: blur(8px);
+      z-index: -1;
+    }
+    .hero > div {
+      padding: 0 20px;
+    }
+    .hero h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 3rem;
+      margin-bottom: 20px;
+      color: #0ff;
+    }
+    .hero p {
+      font-size: 1.2rem;
+      margin-bottom: 40px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      color: #ccc;
+    }
+    .cta {
+      background: #0ff;
+      color: #0a0a0a;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .cta:hover {
+      background: #0cc;
+    }
+    
+    /* Features Section */
+    .features {
+      padding: 60px 20px;
+      background: #141414;
+      text-align: center;
+    }
+    .features h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.2rem;
+      margin-bottom: 40px;
+      color: #0ff;
+    }
+    .feature-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+    }
+    .feature {
+      background: rgba(20,20,20,0.9);
+      padding: 20px;
+      border-radius: 8px;
+      width: 280px;
+      border: 1px solid #333;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.7);
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .feature:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.9);
+    }
+    .feature h4 {
+      font-size: 1.5rem;
+      margin-bottom: 10px;
+      color: #0ff;
+    }
+    .feature p {
+      font-size: 1rem;
+      color: #ccc;
+      line-height: 1.5;
+    }
+    
+    /* Diagram Section */
+    .cy-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: calc(100vh - 300px);
+      margin: 40px 0;
+    }
+    #cy {
+      width: 1200px;
+      height: 900px;
+      background: #1d1d1d;
+      border: 1px solid #0ff;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+      transition: all 0.5s;
+    }
+    
+    /* Footer */
+    footer {
+      background: #0a0a0a;
+      padding: 20px 40px;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #777;
+    }
+    
+    /* Modal Popup Styles (Futuristic Card Style) */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 3000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.8);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .modal-content {
+      background: rgba(30,30,30,0.95);
+      margin: 8% auto;
+      padding: 30px 40px;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.8);
+      animation: slideDown 0.3s ease;
+      font-family: 'Roboto', sans-serif;
+      color: #ccc;
+    }
+    @keyframes slideDown {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .modal-card {
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #333;
+      margin-bottom: 15px;
+      padding-bottom: 5px;
+    }
+    .modal-card-header h3 {
+      margin: 0;
+      font-size: 22px;
+      color: #0ff;
+    }
+    .modal-close {
+      font-size: 28px;
+      color: #0ff;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    .modal-close:hover {
+      color: #0cc;
+    }
+    .modal-card-body p {
+      font-size: 14px;
+      color: #ccc;
+      margin: 10px 0;
+      line-height: 1.5;
+    }
+    .modal-card-body pre {
+      background: #2d2d2d;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #0ff;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="diagram-wrapper">
+    <!-- Header / Navbar -->
+    <header>
+      <h1>ACL Visualizer</h1>
+      <nav>
+        <a href="#features">Features</a>
+        <a href="#demo">Demo</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+    
+    <!-- Hero Section -->
+    <section class="hero">
+      <div>
+        <h2>Visualize & Optimize Your AWS WAF ACL Rules</h2>
+        <p>
+          Our platform transforms complex ACL configurations into interactive diagrams, revealing logical dependencies and simplifying firewall optimization.
+        </p>
+        <a class="cta" href="#demo">Get Started</a>
+      </div>
+    </section>
+    
+    <!-- Features Section -->
+    <section id="features" class="features">
+      <h3>Key Features</h3>
+      <div class="feature-list">
+        <div class="feature">
+          <h4>Interactive Diagrams</h4>
+          <p>Engage with dynamic diagrams that map out rule dependencies with smooth zoom and pan features.</p>
+        </div>
+        <div class="feature">
+          <h4>Live & Static Data</h4>
+          <p>Connect your AWS account for live data or upload your ACL JSON for static analysis, with clear mode indicators.</p>
+        </div>
+        <div class="feature">
+          <h4>Dependency Highlighting</h4>
+          <p>Click a node to highlight its upstream dependencies for an intuitive logical flow.</p>
+        </div>
+        <div class="feature">
+          <h4>Onboarding Tour</h4>
+          <p>Step-by-step guides ensure new users learn how to navigate and use the platform effortlessly.</p>
+        </div>
+        <div class="feature">
+          <h4>Email Notifications</h4>
+          <p>Receive alerts when ACL changes occur, prompting you to log in and review updates.</p>
+        </div>
+        <div class="feature">
+          <h4>Customizable Dashboard</h4>
+          <p>Future integrations include real-time analytics, charts, and interactive reporting for comprehensive insights.</p>
+        </div>
+      </div>
+    </section>
+    
+    <!-- Demo Section -->
+    <section id="demo" class="demo" style="padding: 60px 20px; text-align: center; background: #141414;">
+      <h3 style="color: #0ff;">See It in Action</h3>
+      <p style="color: #aaa;">
+        Explore our interactive demo to see how your complex ACL rules are transformed into clear, actionable visual insights.
+      </p>
+      <a class="cta" href="#signup">Try the Demo</a>
+    </section>
+    
+    <!-- Diagram Section -->
+    <div class="cy-container">
+      <div id="cy"></div>
+    </div>
+    
+    <!-- Footer -->
+    <footer id="contact">
+      <p>&copy; 2025 ACL Visualizer. All rights reserved.</p>
+      <p>Email: support@aclvisualizer.com</p>
+    </footer>
+    
+    <!-- Modal Popup for Node Details -->
+    <div id="popup" class="modal">
+      <div class="modal-content">
+        <span class="close" id="modalClose">&times;</span>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ---------------------------------------------------
+    // Define 7 ACL Rules (simplified) and Final Outcome Nodes
+    // ---------------------------------------------------
+    const rules = [
+      { id: "PathRule1", label: "Matches /api/admin/", action: "Count", level: 1 },
+      { id: "PathRule2", label: "Matches /api/users/", action: "Count", level: 1 },
+      { id: "AdminRateLimit", label: "Rate limit admin requests", action: "Block", level: 2, dependsOn: ["PathRule1"] },
+      { id: "UserRateLimit", label: "Rate limit user requests", action: "Block", level: 2, dependsOn: ["PathRule2"] },
+      { id: "BlockRateLimitedUsers", label: "Block rate-limited users", action: "Block", level: 3, dependsOn: ["AdminRateLimit", "UserRateLimit"] },
+      { id: "HighRiskAccess", label: "Block high-risk access (RU, CN, KP)", action: "Block", level: 3, dependsOn: ["PathRule1"] },
+      { id: "LogBlocked", label: "Log blocked requests (insert X-Block-Reason)", action: "Count", level: 4, dependsOn: ["BlockRateLimitedUsers", "HighRiskAccess"] }
+    ];
+    
+    const finalBlock = { id: "FINAL_BLOCK", label: "⛔ FINAL BLOCK ⛔", action: "Block", level: 5 };
+    const finalPass  = { id: "FINAL_PASS", label: "✅ FINAL PASS ✅", action: "Pass", level: 5 };
+    
+    // ---------------------------------------------------
+    // Group rules by level.
+    // ---------------------------------------------------
+    const levels = {};
+    [...rules, finalBlock, finalPass].forEach(rule => {
+      if (!levels[rule.level]) levels[rule.level] = [];
+      levels[rule.level].push(rule);
+    });
+    
+    // ---------------------------------------------------
+    // Compute positions (manual preset layout)
+    // ---------------------------------------------------
+    const horizontalSpacing = 220;
+    const verticalSpacing = 180;
+    const offsetX = 100;
+    const offsetY = 100;
+    const cyNodes = [];
+    
+    Object.keys(levels).forEach(lvl => {
+      const levelNum = parseInt(lvl, 10);
+      const nodesInLevel = levels[lvl];
+      nodesInLevel.forEach((node, i) => {
+        const x = offsetX + i * horizontalSpacing;
+        const y = offsetY + (levelNum - 1) * verticalSpacing;
+        node.position = { x, y };
+        cyNodes.push({
+          data: {
+            id: node.id,
+            label: `${node.id}: ${node.label} (${node.action})`,
+            action: node.action
+          },
+          position: { x, y }
+        });
+      });
+    });
+    
+    // ---------------------------------------------------
+    // Build edges based on dependencies.
+    // ---------------------------------------------------
+    const cyEdges = [];
+    rules.forEach(rule => {
+      if (rule.dependsOn) {
+        rule.dependsOn.forEach(depId => {
+          cyEdges.push({ data: { source: depId, target: rule.id } });
+        });
+      }
+    });
+    // Final outcome edges:
+    cyEdges.push({ data: { source: "BlockRateLimitedUsers", target: finalBlock.id, direct: true } });
+    cyEdges.push({ data: { source: "LogBlocked", target: finalPass.id, direct: true } });
+    
+    // ---------------------------------------------------
+    // Initialize Cytoscape.
+    // ---------------------------------------------------
+    const cy = cytoscape({
+      container: document.getElementById("cy"),
+      elements: { nodes: cyNodes, edges: cyEdges },
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'label': 'data(label)',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-wrap': 'wrap',
+            'text-max-width': '110px',
+            'width': '100px',
+            'height': '40px',
+            'border-color': '#888',
+            'border-width': 2,
+            'font-size': '10px',
+            'shape': 'round-rectangle'
+          }
+        },
+        { selector: 'node[action="Label"]', style: { 'background-color': '#f8bbd0' } },
+        { selector: 'node[action="Count"]', style: { 'background-color': '#dcedc8' } },
+        { selector: 'node[action="Block"]', style: { 'background-color': '#ff6b6b' } },
+        { selector: 'node[action="Pass"]', style: { 'background-color': '#00aa44' } },
+        {
+          selector: '#FINAL_BLOCK',
+          style: {
+            'background-color': '#cc0000',
+            'border-color': '#990000',
+            'font-weight': 'bold',
+            'width': '70px',
+            'height': '70px'
+          }
+        },
+        {
+          selector: '#FINAL_PASS',
+          style: {
+            'background-color': '#00aa44',
+            'border-color': '#008833',
+            'font-weight': 'bold',
+            'width': '70px',
+            'height': '70px'
+          }
+        },
+        {
+          selector: 'edge[direct]',
+          style: {
+            'line-color': '#ff0000',
+            'width': 3,
+            'target-arrow-color': '#ff0000',
+            'curve-style': 'bezier'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 2,
+            'line-color': '#555',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#555',
+            'curve-style': 'bezier'
+          }
+        }
+      ],
+      layout: { name: 'preset' }
+    });
+    
+    cy.fit(undefined, 50);
+    cy.center();
+    
+    // ---------------------------------------------------
+    // Modal Popup Logic (Card-Inspired)
+    // ---------------------------------------------------
+    const modal = document.getElementById("popup");
+    const modalBody = document.getElementById("modal-body");
+    const modalClose = document.getElementById("modalClose");
+    const closeModal = () => { modal.style.display = "none"; };
+    
+    cy.on("tap", "node", (evt) => {
+      const data = evt.target.data();
+      modalBody.innerHTML = `
+        <div class="modal-card">
+          <div class="modal-card-header">
+            <h3>${data.id}</h3>
+            <span class="modal-close">&times;</span>
+          </div>
+          <div class="modal-card-body">
+            <p><strong>Type:</strong> ${data.action}</p>
+            <p><strong>Details:</strong></p>
+            <pre>${data.label}</pre>
+          </div>
+        </div>
+      `;
+      modal.style.display = "block";
+      const closeBtn = modal.querySelector(".modal-close");
+      if (closeBtn) { closeBtn.onclick = closeModal; }
+    });
+    
+    window.onclick = function(event) {
+      if (event.target === modal) { closeModal(); }
+    };
+  </script>
+</body>
+</html>
