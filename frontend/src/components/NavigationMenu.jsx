@@ -2,15 +2,17 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ButtonGroup, Button, Paper, Box } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import ForestIcon from '@mui/icons-material/Forest';  // Add this import
 
 const NavigationMenu = ({ selectedView, setSelectedView }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const isStatsPage = location.pathname === '/statistics';
+  const isLogTreePage = location.pathname === '/waf-logs';
 
   return (
     <Box display="flex" justifyContent="center" width="100%" flexDirection="column" alignItems="center">
-      {!isStatsPage && (
+      {!isStatsPage && !isLogTreePage && (
         <Paper 
           elevation={1} 
           sx={{ 
@@ -53,14 +55,25 @@ const NavigationMenu = ({ selectedView, setSelectedView }) => {
             </Button>
           </ButtonGroup>
           
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={<AssessmentIcon />}
-            onClick={() => navigate('/statistics')}
-          >
-            View Statistics
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<AssessmentIcon />}
+              onClick={() => navigate('/statistics')}
+            >
+              View Statistics
+            </Button>
+            
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<ForestIcon />}
+              onClick={() => navigate('/waf-logs')}
+            >
+              WAF Log Tree
+            </Button>
+          </Box>
         </Paper>
       )}
     </Box>

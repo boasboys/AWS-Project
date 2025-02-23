@@ -1,0 +1,90 @@
+.node-container {
+  width: 280px;
+  padding: 15px;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  position: relative;
+  margin: 0 !important;
+  padding: 15px !important;
+}
+
+.node-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.node-status-acl {
+  background: #1a365d;
+  color: white;
+}
+
+.node-status-rule {
+  background: #0369a1;
+  color: white;
+}
+
+.node-status-generator {
+  background: #047857;
+  color: white;
+}
+
+/* Remove node-icon related styles as we don't need them anymore */
+
+.node-metrics {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.node-metric {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.react-flow__handle {
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: all !important;
+  display: block !important;
+  width: 10px !important;
+  height: 10px !important;
+  border: 2px solid #fff !important;
+  background-color: #555 !important;
+}
+
+.react-flow__handle-top {
+  top: -6px !important;
+}
+
+.react-flow__handle-bottom {
+  bottom: -6px !important;
+}
+
+.react-flow__edge {
+  pointer-events: all !important;
+  z-index: 1000 !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge-text {
+  font-size: 12px !important;
+  fill: #475569 !important;
+  font-weight: 500 !important;
+}
+
+/* Remove margins that might affect positioning */
+.react-flow__node {
+  margin: 0 !important;
+}

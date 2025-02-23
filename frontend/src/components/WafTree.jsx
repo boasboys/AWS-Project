@@ -1,30 +1,105 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Container, Typography, CircularProgress, Paper } from "@mui/material";
 import axios from "axios";
-import ReactFlow, { Background, Controls } from "reactflow";
+import ReactFlow, {
+  Background,
+  Controls,
+  MiniMap,
+  MarkerType,
+  Position,
+  Handle,
+  ReactFlowProvider  // Add this import
+} from "reactflow";
 import "reactflow/dist/style.css";
+import "../styles/WafTree.css";
 
-/**
- * Extract label names that a rule generates
- */
+const getIcon = (type) => {
+  switch (type) {
+    case 'acl':
+      return 'fa-shield-alt';
+    case 'rule':
+      return 'fa-filter';
+    default:
+      return 'fa-code-branch';
+  }
+};
+
+// Custom Node Component
+const CustomNode = ({ data }) => {
+  const isAclNode = data.type === 'acl';
+  const generatesLabels = data.generatesLabels?.length > 0;
+  
+  const nodeType = isAclNode ? 'acl' : (generatesLabels ? 'generator' : 'rule');
+  
+  const [title, ...details] = data.label.split('\n');
+
+  return (
+    <div className="node-container">
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="source"
+        style={{ 
+          bottom: -8,
+          background: '#555',
+          width: '8px',
+          height: '8px',
+          border: '2px solid white'
+        }}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="target"
+        style={{ 
+          top: -8,
+          background: '#555',
+          width: '8px',
+          height: '8px',
+          border: '2px solid white'
+        }}
+      />
+      
+      <div className={`node-status node-status-${nodeType}`}>
+        {title}
+      </div>
+
+      <div style={{ fontSize: '12px', color: '#475569' }}>
+        {details.map((detail, i) => (
+          <div key={`detail-${i}`}>{detail}</div>  // Added unique key
+        ))}
+      </div>
+
+      {data.generatesLabels && (
+        <div className="node-metrics">
+          <div className="node-metric">
+            <i className="fas fa-tags" style={{ color: '#047857' }}></i>
+            {data.generatesLabels.length} Labels
+          </div>
+          <div className="node-metric">
+            <i className="fas fa-code-branch" style={{ color: '#0369a1' }}></i>
+            {data.dependentCount || 0} Dependencies
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Helper functions
 function getGeneratedLabels(rule) {
   return (rule.RuleLabels || []).map(label => label.Name);
 }
 
-/**
- * Extract label dependencies for a rule
- */
 function getLabelDependencies(rule) {
   if (!rule.Statement) return [];
   
   const deps = [];
   
-  // Check for direct label match statements
   if (rule.Statement.LabelMatchStatement) {
     deps.push(rule.Statement.LabelMatchStatement.Key);
   }
   
-  // Check for AND/OR statements that might contain label matches
   if (rule.Statement.AndStatement) {
     rule.Statement.AndStatement.Statements.forEach(stmt => {
       if (stmt.LabelMatchStatement) {
@@ -36,22 +111,17 @@ function getLabelDependencies(rule) {
   return deps;
 }
 
-/**
- * Group rules by their dependency level
- */
 function organizeRulesByDependency(rules) {
   const rulesByLevel = [];
-  const processed = new Map(); // Changed to Map to store level information
+  const processed = new Map();
   const labelToRule = new Map();
 
-  // Build map of labels to rules that generate them
   rules.forEach(rule => {
     getGeneratedLabels(rule).forEach(label => {
       labelToRule.set(label, rule);
     });
   });
 
-  // Helper to find the highest level of any dependency
   const getMaxDependencyLevel = (rule) => {
     const deps = getLabelDependencies(rule);
     if (deps.length === 0) return -1;
@@ -66,17 +136,14 @@ function organizeRulesByDependency(rules) {
     return maxLevel;
   };
 
-  // Helper to check if rule can be added to current level
   const canAddToLevel = (rule, currentLevel) => {
     const deps = getLabelDependencies(rule);
     if (deps.length === 0) return currentLevel === 0;
 
-    // Check if all dependencies are in previous levels
     const maxDependencyLevel = getMaxDependencyLevel(rule);
     return maxDependencyLevel !== -1 && currentLevel > maxDependencyLevel;
   };
 
-  // Build levels
   let remainingRules = [...rules];
   let currentLevel = 0;
   
@@ -97,8 +164,6 @@ function organizeRulesByDependency(rules) {
       rulesByLevel.push(levelRules);
       currentLevel++;
     } else if (nextRemainingRules.length > 0) {
-      // If we can't add any rules but still have remaining ones,
-      // force add them to prevent infinite loops
       rulesByLevel.push(nextRemainingRules);
       break;
     }
@@ -109,47 +174,61 @@ function organizeRulesByDependency(rules) {
   return rulesByLevel;
 }
 
+// Update generateFlowDiagram function
 function generateFlowDiagram(acl) {
   const nodes = [];
   const edges = [];
-  const nodeMap = new Map(); // Keep track of node IDs for connections
+  const nodeMap = new Map();
 
-  // Root ACL node
   const aclNodeId = `acl-${acl.Id}`;
   nodes.push({
     id: aclNodeId,
-    data: { label: `ACL: ${acl.Name}\nDefaultAction: ${Object.keys(acl.DefaultAction)[0]}` },
-    position: { x: 400, y: 0 },
-    style: {
-      background: "#4682B4",
-      padding: 10,
-      borderRadius: 10,
-      color: "#fff",
-      width: "auto",
-      minWidth: 300,
-      textAlign: "center",
-      whiteSpace: "pre-wrap"
-    }
+    type: 'custom',
+    data: { 
+      label: `ACL: ${acl.Name}\nDefaultAction: ${Object.keys(acl.DefaultAction)[0]}`,
+      type: 'acl'
+    },
+    position: { x: 400, y: 50 },
+    style: { zIndex: 1000 }
   });
 
   const ruleLevels = organizeRulesByDependency(acl.Rules || []);
-  const VERTICAL_SPACING = 200;  // Increased for better readability
-  const HORIZONTAL_SPACING = 400; // Increased for better spacing
+  const VERTICAL_SPACING = 300;
+  const HORIZONTAL_SPACING = 400;
 
+  // Create reusable edge configuration
+  const createEdge = (source, target, label = null) => ({
+    id: `e-${source}-${target}${label ? `-${label}` : ''}`,
+    source,
+    target,
+    sourceHandle: 'source',
+    targetHandle: 'target',
+    type: 'step',  // Changed from smoothstep
+    animated: true,
+    label,
+    style: { stroke: '#555', strokeWidth: 2 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 20,
+      height: 20,
+      color: '#555',
+    }
+  });
+
+  // Create nodes with correct dependency count
   ruleLevels.forEach((levelRules, levelIndex) => {
-    const y = (levelIndex + 1) * VERTICAL_SPACING;
+    const y = (levelIndex + 1) * VERTICAL_SPACING + 50;
     
     levelRules.forEach((rule, ruleIndex) => {
-      const x = ((ruleIndex - (levelRules.length - 1) / 2) * HORIZONTAL_SPACING) + 400;
-      const ruleNodeId = `rule-${rule.Name}-${levelIndex}-${ruleIndex}`;
+      const centerOffset = (levelRules.length - 1) / 2;
+      const x = ((ruleIndex - centerOffset) * HORIZONTAL_SPACING) + 400;
+      const ruleNodeId = `rule-${rule.Name}`;
       const action = rule.Action ? Object.keys(rule.Action)[0] : 
                     rule.OverrideAction ? Object.keys(rule.OverrideAction)[0] : 'None';
 
-      // Get generated labels and dependencies
       const generatedLabels = getGeneratedLabels(rule);
-      const dependentLabels = getLabelDependencies(rule);
+      const dependentLabels = getLabelDependencies(rule);  // Get labels this rule depends on
       
-      // Create enhanced label with label information
       const labelText = [
         `Rule: ${rule.Name}`,
         `Priority: ${rule.Priority}`,
@@ -160,68 +239,64 @@ function generateFlowDiagram(acl) {
 
       nodes.push({
         id: ruleNodeId,
-        data: { label: labelText },
+        type: 'custom',
+        data: { 
+          label: labelText,
+          generatesLabels: generatedLabels,
+          dependentCount: dependentLabels.length,  // Use number of labels this rule depends on
+          type: 'rule'
+        },
         position: { x, y },
-        style: {
-          background: generatedLabels.length > 0 ? "#90EE90" : "#87CEEB", // Green for rules that generate labels
-          padding: 10,
-          borderRadius: 10,
-          width: "auto",
-          minWidth: 300,
-          textAlign: "center",
-          whiteSpace: "pre-wrap",
-          fontSize: "12px"
-        }
       });
 
-      // Store node in map for edge creation
       nodeMap.set(rule.Name, ruleNodeId);
-
-      // Connect to ACL if it's the first level
-      if (levelIndex === 0) {
-        edges.push({
-          id: `e-acl-${ruleNodeId}`,
-          source: aclNodeId,
-          target: ruleNodeId,
-          animated: true,
-          style: { stroke: "#4682B4" }
-        });
-      }
     });
   });
 
-  // Create edges for label dependencies after all nodes are created
+  // Second pass: Create edges based on dependencies
   acl.Rules.forEach(rule => {
-    const deps = getLabelDependencies(rule);
     const targetNodeId = nodeMap.get(rule.Name);
+    const deps = getLabelDependencies(rule);
     
+    // Connect first level rules to ACL
+    if (ruleLevels[0].includes(rule)) {
+      edges.push(createEdge(aclNodeId, targetNodeId));
+    }
+
+    // Connect dependent rules
     deps.forEach(dep => {
-      // Find the rule that generates this label
-      const sourceRule = acl.Rules.find(r => 
-        (r.RuleLabels || []).some(label => label.Name === dep)
+      const sourceRules = acl.Rules.filter(r => 
+        getGeneratedLabels(r).includes(dep)
       );
       
-      if (sourceRule && nodeMap.has(sourceRule.Name)) {
+      sourceRules.forEach(sourceRule => {
         const sourceNodeId = nodeMap.get(sourceRule.Name);
-        edges.push({
-          id: `e-${sourceNodeId}-${targetNodeId}`,
-          source: sourceNodeId,
-          target: targetNodeId,
-          animated: true,
-          label: `Uses ${dep}`,
-          style: { stroke: "#FF6B6B" },
-          labelStyle: { fill: "#FF6B6B", fontSize: 12 }
-        });
-      }
+        if (sourceNodeId && sourceNodeId !== targetNodeId) {
+          edges.push(createEdge(sourceNodeId, targetNodeId, `Uses ${dep}`));
+        }
+      });
     });
   });
 
-  return { nodes, edges };
+  return {
+    nodes,
+    edges,
+    viewport: {
+      x: 0,
+      y: 0,
+      zoom: 0.6  // Reduced zoom to show more
+    }
+  };
 }
 
 const WafTree = () => {
   const [wafAcls, setWafAcls] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Move useMemo before any conditional returns
+  const nodeTypes = useMemo(() => ({
+    custom: CustomNode
+  }), []);
 
   useEffect(() => {
     const fetchWafAcls = async () => {
@@ -249,29 +324,79 @@ const WafTree = () => {
   }
 
   return (
-    <Container style={{ marginTop: 20 }}>
+    <Container maxWidth={false} style={{ padding: 0 }}>
       <Typography variant="h4" align="center" gutterBottom>
         AWS WAF ACL Flow
       </Typography>
 
       {wafAcls.map((acl, index) => {
-        const { nodes, edges } = generateFlowDiagram(acl);
+        const { nodes, edges, viewport } = generateFlowDiagram(acl);
         return (
-          <>
+          <React.Fragment key={acl.Id || `acl-${index}`}>
             <Typography variant="h6" gutterBottom>
               ACL Name: {acl.Name}
             </Typography>
-            <Paper key={acl.Id || index} style={{ padding: 10, marginTop: 20, height: 700 }}>
-              <ReactFlow nodes={nodes} edges={edges} fitView>
-                <Background />
-                <Controls />
-              </ReactFlow>
-            </Paper>
-          </>
+            <div style={{ height: '800px', width: '100%' }}>
+              <ReactFlowProvider>
+                <ReactFlow
+                  nodes={nodes}
+                  edges={edges}
+                  nodeTypes={nodeTypes}
+                  fitView
+                  defaultViewport={viewport}
+                  defaultEdgeOptions={{
+                    type: 'step',
+                    animated: true
+                  }}
+                  fitViewOptions={{
+                    padding: 0.5,
+                    includeHiddenNodes: true,
+                    minZoom: 0.2,
+                    maxZoom: 1.5
+                  }}
+                  minZoom={0.1}
+                  maxZoom={2}
+                  style={{ background: '#fafafa' }}
+                  nodesDraggable={false}
+                  nodesConnectable={false}
+                  elementsSelectable={false}
+                >
+                  <Background color="#f1f5f9" gap={16} />
+                  <Controls />
+                  <MiniMap 
+                    style={{ height: 120 }} 
+                    zoomable 
+                    pannable 
+                    nodeColor="#555"
+                  />
+                </ReactFlow>
+              </ReactFlowProvider>
+            </div>
+          </React.Fragment>
         );
       })}
     </Container>
   );
 };
+
+// Add these styles to your CSS
+const styles = `
+.custom-node {
+  transition: all 0.2s ease;
+}
+
+.custom-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+
+.node-content {
+  transition: all 0.2s ease;
+}
+
+.node-content:hover {
+  filter: brightness(110%);
+}
+`;
 
 export default WafTree;
