@@ -1,0 +1,165 @@
+.waf-table-container {
+  position: fixed;  /* Change from default to fixed */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.waf-table-header {
+  margin-bottom: 20px;
+  h2 {
+    color: black;
+  }
+}
+
+.waf-table-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.back-button,
+.upload-button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  background-color: #0066cc;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.back-button:hover,
+.upload-button:hover {
+  background-color: #0052a3;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: white;
+  margin-top: 20px;
+  height: auto;  /* Remove fixed height */
+}
+
+.waf-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  font-size: 14px;
+  table-layout: fixed;  /* Added for better column control */
+}
+
+.waf-table th:nth-child(1), /* Name column */
+.waf-table td:nth-child(1) {
+  width: 8%;
+}
+
+.waf-table th:nth-child(2), /* Priority column */
+.waf-table td:nth-child(2) {
+  width: 35%;
+}
+
+.waf-table th,
+.waf-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border: 1px solid #e0e0e0;
+  background-color: white;
+  color: #333;
+}
+
+.waf-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.waf-table th:hover {
+  background-color: #e9ecef;
+}
+
+.waf-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.action-allow {
+  background-color: rgba(230, 255, 230, 0.5) !important;
+}
+
+.action-block {
+  background-color: rgba(255, 230, 230, 0.5) !important;
+}
+
+.action-count {
+  background-color: rgba(230, 243, 255, 0.5) !important;
+}
+
+.waf-table-loading,
+.waf-table-error {
+  text-align: center;
+  padding: 20px;
+  font-size: 18px;
+}
+
+.waf-table-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  z-index: 1000;
+}
+
+.waf-table-error {
+  color: #dc3545;
+}
+
+@media (max-width: 768px) {
+  .waf-table-container {
+    padding: 10px;
+  }
+  
+  .waf-table th,
+  .waf-table td {
+    padding: 8px;
+    font-size: 14px;
+  }
+}
+
+.waf-table-message {
+  text-align: center;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin: 20px 0;
+  color: #666;
+}
+
+.waf-table-error {
+  text-align: center;
+  padding: 12px;
+  background-color: #fff3f3;
+  border-radius: 8px;
+  margin: 10px 0;
+  color: #dc3545;
+  border: 1px solid #ffcdd2;
+}

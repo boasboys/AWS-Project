@@ -1,0 +1,18 @@
+.back-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background-color: #0066cc;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin-right: 10px;  /* Add spacing between buttons */
+}
+
+.back-button:hover {
+    background-color: #0052a3;
+}
+
+.recharts-responsive-container {
+    height: 400px !important;
+}
