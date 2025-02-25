@@ -25,6 +25,8 @@ import {
   Cell,
 } from 'recharts';
 
+import { fetchWafLogs } from '../utils/api';
+
 const COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#9C27B0'];
 
 function StatsComponent() {
@@ -51,9 +53,7 @@ function StatsComponent() {
 
   const fetchAndProcessLogs = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/logs?logGroupName=aws-waf-logs-mywaf&logStreamName=cloudfront_demo_0');
-      const data = await response.json();
-      
+      const data = await fetchWafLogs();
       const processedStats = processLogs(data.events);
       setStats(processedStats);
     } catch (err) {

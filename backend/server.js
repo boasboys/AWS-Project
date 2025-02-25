@@ -89,6 +89,7 @@ app.get("/api/waf-acls", async (req, res) => {
   try {
     console.log("🚀 API Request: Fetching all WAF ACLs...");
     const acls = await listWafAcls();
+    
 
     if (acls.length === 0) {
       console.warn("⚠️ No WAF ACLs found.");

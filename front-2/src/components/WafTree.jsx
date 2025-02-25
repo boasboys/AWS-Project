@@ -14,6 +14,8 @@ import dagre from 'dagre';
 import { useNavigate } from 'react-router-dom';
 import { toPng, toJpeg, toSvg } from 'html-to-image';
 import jsPDF from 'jspdf';
+import '../styles/WafTree.css';
+import { fetchWafRules } from '../utils/api';
 
 // Add custom edge type with better routing
 const CustomEdge = ({
@@ -78,65 +80,92 @@ const formatRuleInfo = (rule, dependencies = []) => {
   return parts.join('\n');
 };
 
-// Add this function after the existing helper functions
+// Update the function to properly handle nested statements including RateBasedStatement
+const checkStatementsForLabels = (statement) => {
+  const dependencies = new Set();
+
+  const processStatement = (stmt) => {
+    if (!stmt) return;
+
+    if (stmt.LabelMatchStatement) {
+      dependencies.add(stmt.LabelMatchStatement.Key);
+    }
+
+    if (stmt.RateBasedStatement && stmt.RateBasedStatement.ScopeDownStatement) {
+      processStatement(stmt.RateBasedStatement.ScopeDownStatement);
+    }
+
+    if (stmt.AndStatement) {
+      stmt.AndStatement.Statements.forEach(processStatement);
+    }
+    if (stmt.OrStatement) {
+      stmt.OrStatement.Statements.forEach(processStatement);
+    }
+    if (stmt.NotStatement) {
+      processStatement(stmt.NotStatement.Statement);
+    }
+  };
+
+  processStatement(statement);
+  return dependencies;
+};
+
+// Replace the existing calculateDependencyLevels function with this updated version
 const calculateDependencyLevels = (rules, labelMap) => {
   const levels = new Map();
+  const dependenciesMap = new Map();
   const processed = new Set();
+  const visiting = new Set();
 
-  const getDependencyLevel = (rule) => {
+  const getDependencyLevel = (rule, path = new Set()) => {
     if (processed.has(rule.Name)) {
       return levels.get(rule.Name);
     }
 
+    if (visiting.has(rule.Name)) {
+      return 0; // Break circular dependencies
+    }
+
+    visiting.add(rule.Name);
     let maxDependencyLevel = 0;
     const dependencies = new Set();
 
-    // Helper function to check statements for label dependencies
-    const checkStatementsForLabels = (statements) => {
-      statements.forEach(stmt => {
-        if (stmt.LabelMatchStatement) {
-          dependencies.add(stmt.LabelMatchStatement.Key);
-        } else if (stmt.AndStatement) {
-          checkStatementsForLabels(stmt.AndStatement.Statements);
-        } else if (stmt.OrStatement) {
-          checkStatementsForLabels(stmt.OrStatement.Statements);
-        } else if (stmt.NotStatement) {
-          checkStatementsForLabels([stmt.NotStatement.Statement]);
-        }
-      });
-    };
+    // Get direct dependencies from statements
+    const labels = checkStatementsForLabels(rule.Statement);
+    labels.forEach(depLabel => dependencies.add(depLabel));
 
-    if (rule.Statement) {
-      checkStatementsForLabels([rule.Statement]);
-    }
+    // Store dependencies for the rule
+    dependenciesMap.set(rule.Name, Array.from(dependencies));
 
-    if (dependencies.size === 0) {
-      levels.set(rule.Name, 0);
-      processed.add(rule.Name);
-      return 0;
-    }
-
+    // Process each dependency
     dependencies.forEach(depLabel => {
       const sourceRules = labelMap.get(depLabel) || [];
       sourceRules.forEach(sourceRule => {
-        const sourceRuleObj = rules.find(r => r.Name === sourceRule);
-        if (sourceRuleObj) {
-          const level = getDependencyLevel(sourceRuleObj);
-          maxDependencyLevel = Math.max(maxDependencyLevel, level + 1);
+        if (!path.has(sourceRule)) { // Prevent circular dependencies
+          const sourceRuleObj = rules.find(r => r.Name === sourceRule);
+          if (sourceRuleObj) {
+            const newPath = new Set(path);
+            newPath.add(rule.Name);
+            const level = getDependencyLevel(sourceRuleObj, newPath);
+            maxDependencyLevel = Math.max(maxDependencyLevel, level + 1);
+          }
         }
       });
     });
 
     levels.set(rule.Name, maxDependencyLevel);
     processed.add(rule.Name);
+    visiting.delete(rule.Name);
     return maxDependencyLevel;
   };
 
   rules.forEach(rule => {
-    getDependencyLevel(rule);
+    if (!processed.has(rule.Name)) {
+      getDependencyLevel(rule, new Set());
+    }
   });
 
-  return levels;
+  return { levels, dependenciesMap };
 };
 
 // Add after the existing helper functions
@@ -227,14 +256,16 @@ const isIndependentRule = (rule, usedLabels) => {
   return true;
 };
 
-// Update the processWafRules function
+// Update the processWafRules function to properly create edges
 const processWafRules = (data) => {
   const rules = data[0].Rules;
   const nodes = [];
   const edges = [];
   const labelMap = new Map();
+  const labelProviders = new Map(); // Map to track which rules provide which labels
+  const ruleDependencies = new Map(); // Map to track direct dependencies between rules
 
-  // First pass: track all labels
+  // First pass: track all labels and their source rules
   rules.forEach((rule) => {
     if (rule.RuleLabels) {
       rule.RuleLabels.forEach(label => {
@@ -242,26 +273,79 @@ const processWafRules = (data) => {
           labelMap.set(label.Name, []);
         }
         labelMap.get(label.Name).push(rule.Name);
+        
+        // Track which rule provides this label
+        labelProviders.set(label.Name, rule.Name);
       });
     }
   });
 
-  // Get set of labels that are actually used in dependencies
-  const usedLabels = getUsedLabels(rules);
+  // Second pass: build direct rule dependencies
+  rules.forEach((rule) => {
+    const dependencies = new Set();
+    const processStatement = (stmt) => {
+      if (!stmt) return;
 
-  // Separate independent rules (including those that add unused labels)
-  const independentRules = rules.filter(rule => isIndependentRule(rule, usedLabels));
-  const dependentRules = rules.filter(rule => !isIndependentRule(rule, usedLabels));
+      if (stmt.LabelMatchStatement) {
+        const labelProvider = labelProviders.get(stmt.LabelMatchStatement.Key);
+        if (labelProvider) {
+          dependencies.add(labelProvider);
+        }
+      }
 
-  // Calculate dependency levels for dependent rules
-  const dependencyLevels = calculateDependencyLevels(dependentRules, labelMap);
+      if (stmt.RateBasedStatement?.ScopeDownStatement) {
+        processStatement(stmt.RateBasedStatement.ScopeDownStatement);
+      }
+      if (stmt.AndStatement) {
+        stmt.AndStatement.Statements.forEach(processStatement);
+      }
+      if (stmt.OrStatement) {
+        stmt.OrStatement.Statements.forEach(processStatement);
+      }
+      if (stmt.NotStatement) {
+        processStatement(stmt.NotStatement.Statement);
+      }
+    };
 
-  // Group dependent nodes by level
+    processStatement(rule.Statement);
+    ruleDependencies.set(rule.Name, Array.from(dependencies));
+  });
+
+  // Calculate levels ensuring dependent rules are below their dependencies
+  const levels = new Map();
+  const calculateLevel = (ruleName, visited = new Set()) => {
+    if (levels.has(ruleName)) return levels.get(ruleName);
+    if (visited.has(ruleName)) return 0;
+
+    visited.add(ruleName);
+    const dependencies = ruleDependencies.get(ruleName) || [];
+    
+    if (dependencies.length === 0) {
+      // Check if this rule provides any labels used by others
+      const providesUsedLabels = rules.find(r => r.Name === ruleName)?.RuleLabels?.some(label => 
+        Array.from(ruleDependencies.values()).some(deps => deps.includes(ruleName))
+      );
+      
+      levels.set(ruleName, providesUsedLabels ? 0 : -1);
+      return levels.get(ruleName);
+    }
+
+    let maxLevel = -1;
+    dependencies.forEach(dep => {
+      const depLevel = calculateLevel(dep, new Set(visited));
+      maxLevel = Math.max(maxLevel, depLevel + 1);
+    });
+
+    levels.set(ruleName, maxLevel);
+    return maxLevel;
+  };
+
+  rules.forEach(rule => calculateLevel(rule.Name));
+
+  // Group rules by level
   const nodesByLevel = new Map();
-  nodesByLevel.set(-1, independentRules); // Put independent rules at level -1 (top)
-
-  dependentRules.forEach((rule) => {
-    const level = dependencyLevels.get(rule.Name);
+  rules.forEach(rule => {
+    const level = levels.get(rule.Name);
     if (!nodesByLevel.has(level)) {
       nodesByLevel.set(level, []);
     }
@@ -271,8 +355,6 @@ const processWafRules = (data) => {
   // Calculate positions and create nodes
   const levelHeight = 200;
   const horizontalGap = 50;
-
-  // Sort levels to ensure independent rules are processed first
   const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b);
 
   sortedLevels.forEach((level) => {
@@ -283,26 +365,7 @@ const processWafRules = (data) => {
 
     levelRules.forEach((rule, index) => {
       const x = startX + index * (nodeWidth + horizontalGap);
-      const dependencies = new Set();
-
-      // Check for label dependencies
-      const checkStatementsForLabels = (statements) => {
-        statements.forEach(stmt => {
-          if (stmt.LabelMatchStatement) {
-            dependencies.add(stmt.LabelMatchStatement.Key);
-          } else if (stmt.AndStatement) {
-            checkStatementsForLabels(stmt.AndStatement.Statements);
-          } else if (stmt.OrStatement) {
-            checkStatementsForLabels(stmt.OrStatement.Statements);
-          } else if (stmt.NotStatement) {
-            checkStatementsForLabels([stmt.NotStatement.Statement]);
-          }
-        });
-      };
-
-      if (rule.Statement) {
-        checkStatementsForLabels([rule.Statement]);
-      }
+      const dependencies = checkStatementsForLabels(rule.Statement);
 
       const action = rule.Action ? Object.keys(rule.Action)[0] :
         rule.OverrideAction ? Object.keys(rule.OverrideAction)[0] : 'None';
@@ -311,7 +374,7 @@ const processWafRules = (data) => {
       const calculatedHeight = calculateTextHeight(label, nodeWidth);
       const finalHeight = Math.max(nodeHeight, calculatedHeight);
 
-      nodes.push({
+      const newNode = {
         id: rule.Name,
         data: { label },
         position: { x, y },
@@ -327,15 +390,16 @@ const processWafRules = (data) => {
         },
         sourcePosition: 'bottom',
         targetPosition: 'top',
-      });
+      };
+      nodes.push(newNode);
 
       // Create edges for dependencies
       dependencies.forEach(depLabel => {
         const sources = labelMap.get(depLabel) || [];
         sources.forEach(source => {
-          edges.push({
+          const newEdge = {
             id: `${source}-${rule.Name}`,
-            source,
+            source: source,
             target: rule.Name,
             type: 'custom-edge',
             animated: true,
@@ -347,7 +411,8 @@ const processWafRules = (data) => {
             markerEnd: {
               type: MarkerType.ArrowClosed,
             },
-          });
+          };
+          edges.push(newEdge);
         });
       });
     });
@@ -537,8 +602,7 @@ function WafTree() {
 
   const fetchServerRules = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/waf-acls');
-      const data = await response.json();
+      const data = await fetchWafRules();
       const { nodes: layoutedNodes, edges: layoutedEdges } = processWafRules(data);
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
@@ -548,22 +612,11 @@ function WafTree() {
   }, []);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/waf-acls')
-      .then(res => res.json())
-      .then(data => {
-        const { nodes: layoutedNodes, edges: layoutedEdges } = processWafRules(data);
-        setNodes(layoutedNodes);
-        setEdges(layoutedEdges);
-      })
-      .catch(console.error);
-  }, []);
+    fetchServerRules();
+  }, [fetchServerRules]);
 
   return (
-    <div style={{
-      width: '100vw',
-      height: '100vh',
-      cursor: isDarkMode ? 'white' : 'black',
-    }}>
+    <div className={`waf-container ${isDarkMode ? 'dark' : 'light'}`}>
       <ReactFlow
         ref={flowRef}
         nodes={nodes.map(node => ({
@@ -604,52 +657,36 @@ function WafTree() {
       >
         <Background />
         <Controls style={{ color: 'black' }} />
-        {/* Center title panel */}
-        <Panel position="top-center" style={{
-          position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 5,
-        }}>
-          <h2 style={{
-            color: isDarkMode ? 'white' : 'black',
-            margin: 0,
-            padding: '10px',
-            textAlign: 'center',
-          }}>
+        
+        <Panel position="top-center" className="center-panel">
+          <h2 className={`waf-title ${isDarkMode ? 'dark' : 'light'}`}>
             AWS WAF Rules Dependency Graph
           </h2>
         </Panel>
 
-        {/* Left panel with home button and theme toggle */}
         <Panel position="top-left">
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          <div className="button-container">
             <button
               onClick={() => navigate('/home')}
-              style={buttonStyle}
+              className="waf-button"
             >
               Back to Home
             </button>
             <button
               onClick={toggleTheme}
-              style={{
-                ...buttonStyle,
-                background: isDarkMode ? '#f8f9fa' : '#1a1a1a',
-                color: isDarkMode ? '#1a1a1a' : '#f8f9fa',
-              }}
+              className={`theme-button ${isDarkMode ? 'dark' : 'light'}`}
             >
               {isDarkMode ? '☀️ Light' : '🌙 Dark'}
             </button>
           </div>
         </Panel>
 
-        {/* Right panel with upload and export controls */}
         <Panel position="top-right">
-          <div style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
-            <div style={{ position: 'relative' }}>
+          <div className="button-container">
+            <div>
               <button
                 onClick={() => document.getElementById('fileInput').click()}
-                style={buttonStyle}
+                className="waf-button"
               >
                 Upload JSON
               </button>
@@ -664,30 +701,30 @@ function WafTree() {
             
             <button
               onClick={fetchServerRules}
-              style={buttonStyle}
+              className="waf-button"
             >
               Fetch Server Rules
             </button>
 
-            <div style={{ position: 'relative' }}>
+            <div>
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                style={buttonStyle}
+                className="waf-button"
               >
                 Export
               </button>
               {showExportMenu && (
-                <div style={exportMenuStyle}>
-                  <button onClick={() => downloadImage('pdf')} style={exportOptionStyle}>
+                <div className="export-menu">
+                  <button onClick={() => downloadImage('pdf')} className="export-option">
                     PDF
                   </button>
-                  <button onClick={() => downloadImage('png')} style={exportOptionStyle}>
+                  <button onClick={() => downloadImage('png')} className="export-option">
                     PNG
                   </button>
-                  <button onClick={() => downloadImage('jpg')} style={exportOptionStyle}>
+                  <button onClick={() => downloadImage('jpg')} className="export-option">
                     JPG
                   </button>
-                  <button onClick={() => downloadImage('svg')} style={exportOptionStyle}>
+                  <button onClick={() => downloadImage('svg')} className="export-option">
                     SVG
                   </button>
                 </div>
@@ -699,48 +736,5 @@ function WafTree() {
     </div>
   );
 }
-
-// Add new styles before existing styles
-const exportMenuStyle = {
-  position: 'absolute',
-  top: '100%',
-  right: 0,
-  backgroundColor: 'white',
-  border: '1px solid #ccc',
-  borderRadius: '4px',
-  boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-  zIndex: 1000,
-  marginTop: '5px',
-  minWidth: '120px',
-};
-
-const exportOptionStyle = {
-  display: 'block',
-  width: '100%',
-  padding: '8px 12px',
-  border: 'none',
-  backgroundColor: 'transparent',
-  cursor: 'pointer',
-  textAlign: 'left',
-  color: '#000',
-  transition: 'background-color 0.2s',
-  '&:hover': {
-    backgroundColor: '#f0f0f0',
-  },
-};
-
-// Add styles
-const buttonStyle = {
-  padding: '0.5rem 1rem',
-  background: '#1565c0',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  transition: 'background-color 0.3s',
-  '&:hover': {
-    background: '#1976d2',
-  },
-};
 
 export default WafTree;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/WafTable.css';
+import { fetchWafRules } from '../utils/api';
 
 function WafTable() {
   const [rules, setRules] = useState([]);
@@ -11,8 +12,7 @@ function WafTable() {
 
   const fetchServerRules = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/waf-acls');
-      const data = await response.json();
+      const data = await fetchWafRules();
       if (data && data[0] && data[0].Rules) {
         setRules(data[0].Rules);
         setError(null);
@@ -23,7 +23,6 @@ function WafTable() {
   }, []);
 
   useEffect(() => {
-    // Try to fetch from server in background
     fetchServerRules();
   }, [fetchServerRules]);
 
