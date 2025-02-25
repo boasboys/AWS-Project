@@ -16,6 +16,7 @@ import { toPng, toJpeg, toSvg } from 'html-to-image';
 import jsPDF from 'jspdf';
 import '../styles/WafTree.css';
 import { fetchWafRules } from '../utils/api';
+import RuleDetailsPopup from './RuleDetailsPopup';
 
 // Add custom edge type with better routing
 const CustomEdge = ({
@@ -137,11 +138,12 @@ const calculateDependencyLevels = (rules, labelMap) => {
     // Store dependencies for the rule
     dependenciesMap.set(rule.Name, Array.from(dependencies));
 
-    // Process each dependency
+    // Process each dependency – skip if the label is provided by the same rule
     dependencies.forEach(depLabel => {
       const sourceRules = labelMap.get(depLabel) || [];
       sourceRules.forEach(sourceRule => {
-        if (!path.has(sourceRule)) { // Prevent circular dependencies
+        if (sourceRule === rule.Name) return; // skip self-dependency
+        if (!path.has(sourceRule)) {
           const sourceRuleObj = rules.find(r => r.Name === sourceRule);
           if (sourceRuleObj) {
             const newPath = new Set(path);
@@ -153,10 +155,15 @@ const calculateDependencyLevels = (rules, labelMap) => {
       });
     });
 
-    levels.set(rule.Name, maxDependencyLevel);
+    // If no dependencies, set level to 0 so the rule appears in the first row
+    if (dependencies.size === 0) {
+      levels.set(rule.Name, 0);
+    } else {
+      levels.set(rule.Name, maxDependencyLevel);
+    }
     processed.add(rule.Name);
     visiting.delete(rule.Name);
-    return maxDependencyLevel;
+    return levels.get(rule.Name);
   };
 
   rules.forEach(rule => {
@@ -288,7 +295,8 @@ const processWafRules = (data) => {
 
       if (stmt.LabelMatchStatement) {
         const labelProvider = labelProviders.get(stmt.LabelMatchStatement.Key);
-        if (labelProvider) {
+        // אם התווית מסופקת על ידי אותו חוק – דלג
+        if (labelProvider && labelProvider !== rule.Name) {
           dependencies.add(labelProvider);
         }
       }
@@ -321,13 +329,8 @@ const processWafRules = (data) => {
     const dependencies = ruleDependencies.get(ruleName) || [];
     
     if (dependencies.length === 0) {
-      // Check if this rule provides any labels used by others
-      const providesUsedLabels = rules.find(r => r.Name === ruleName)?.RuleLabels?.some(label => 
-        Array.from(ruleDependencies.values()).some(deps => deps.includes(ruleName))
-      );
-      
-      levels.set(ruleName, providesUsedLabels ? 0 : -1);
-      return levels.get(ruleName);
+      levels.set(ruleName, 0);
+      return 0;
     }
 
     let maxLevel = -1;
@@ -390,6 +393,7 @@ const processWafRules = (data) => {
         },
         sourcePosition: 'bottom',
         targetPosition: 'top',
+        rule: rule, // store the full rule data
       };
       nodes.push(newNode);
 
@@ -397,6 +401,7 @@ const processWafRules = (data) => {
       dependencies.forEach(depLabel => {
         const sources = labelMap.get(depLabel) || [];
         sources.forEach(source => {
+          if (source === rule.Name) return;
           const newEdge = {
             id: `${source}-${rule.Name}`,
             source: source,
@@ -464,6 +469,11 @@ function WafTree() {
   const [highlightedNode, setHighlightedNode] = useState(null);
   const [clickedNode, setClickedNode] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [selectedRule, setSelectedRule] = useState(null);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [filteredNodes, setFilteredNodes] = useState([]);
+  const [filteredEdges, setFilteredEdges] = useState([]);
 
   const highlightConnectedEdges = useCallback((nodeId, shouldHighlight) => {
     const connectedEdges = edges.map(edge => ({
@@ -492,15 +502,23 @@ function WafTree() {
 
   const onNodeClick = useCallback((event, node) => {
     if (clickedNode === node.id) {
-      // If clicking the same node again, remove highlighting
       setClickedNode(null);
       highlightConnectedEdges(null, false);
+      setPopupPosition(null);
     } else {
-      // Highlight new clicked node
       setClickedNode(node.id);
       highlightConnectedEdges(node.id, true);
+      const rect = event.currentTarget.getBoundingClientRect();
+      setPopupPosition({
+        x: rect.left + window.scrollX,
+        y: rect.bottom + window.scrollY
+      });
     }
-  }, [clickedNode, highlightConnectedEdges]);
+
+    // Find and set the selected rule
+    const rule = nodes.find(n => n.id === node.id)?.rule;
+    setSelectedRule(rule);
+  }, [clickedNode, highlightConnectedEdges, nodes]);
 
   // Add file upload handler
   const handleFileUpload = useCallback((event) => {
@@ -513,6 +531,8 @@ function WafTree() {
           const { nodes: layoutedNodes, edges: layoutedEdges } = processWafRules([jsonData]);
           setNodes(layoutedNodes);
           setEdges(layoutedEdges);
+          setFilteredNodes(layoutedNodes);
+          setFilteredEdges(layoutedEdges);
         } catch (error) {
           console.error('Error parsing JSON:', error);
           alert('Invalid JSON file format');
@@ -606,10 +626,47 @@ function WafTree() {
       const { nodes: layoutedNodes, edges: layoutedEdges } = processWafRules(data);
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
+      setFilteredNodes(layoutedNodes);
+      setFilteredEdges(layoutedEdges);
     } catch (err) {
       console.error('Failed to fetch WAF rules:', err);
     }
   }, []);
+
+  const filterGraph = useCallback((searchTerm) => {
+    if (!searchTerm.trim()) {
+      setFilteredNodes(nodes);
+      setFilteredEdges(edges);
+      return;
+    }
+
+    const term = searchTerm.toLowerCase();
+    const matchingNodes = nodes.filter(node => {
+      const rule = node.rule;
+      const nodeText = [
+        node.data.label.toLowerCase(),
+        rule.Name.toLowerCase(),
+        rule.RuleLabels?.map(l => l.Name.toLowerCase()).join(' ') || '',
+        // Add more fields to search through if needed
+      ].join(' ');
+
+      return nodeText.includes(term);
+    });
+
+    const matchingNodeIds = new Set(matchingNodes.map(node => node.id));
+
+    // Keep edges that connect matching nodes
+    const relevantEdges = edges.filter(edge => 
+      matchingNodeIds.has(edge.source) && matchingNodeIds.has(edge.target)
+    );
+
+    setFilteredNodes(matchingNodes);
+    setFilteredEdges(relevantEdges);
+  }, [nodes, edges]);
+
+  useEffect(() => {
+    filterGraph(searchText);
+  }, [searchText, filterGraph]);
 
   useEffect(() => {
     fetchServerRules();
@@ -619,7 +676,7 @@ function WafTree() {
     <div className={`waf-container ${isDarkMode ? 'dark' : 'light'}`}>
       <ReactFlow
         ref={flowRef}
-        nodes={nodes.map(node => ({
+        nodes={filteredNodes.map(node => ({
           ...node,
           style: {
             ...node.style,
@@ -629,7 +686,7 @@ function WafTree() {
               node.style.boxShadow
           }
         }))}
-        edges={edges}
+        edges={filteredEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         edgeTypes={edgeTypes}  // Use the constant defined outside
@@ -646,10 +703,11 @@ function WafTree() {
         style={{
           background: isDarkMode ? '#1a1a1a' : '#f8f9fa',
         }}
+        // Allow further zooming out by lowering the minimum zoom
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={true}
-        minZoom={0.2}
+        minZoom={0.1}
         maxZoom={1.5}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
@@ -678,6 +736,26 @@ function WafTree() {
             >
               {isDarkMode ? '☀️ Light' : '🌙 Dark'}
             </button>
+          </div>
+        </Panel>
+
+        <Panel position="top-left" className="search-panel">
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="Search rules and labels..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="search-input"
+            />
+            {searchText && (
+              <button
+                onClick={() => setSearchText('')}
+                className="clear-search"
+              >
+                ×
+              </button>
+            )}
           </div>
         </Panel>
 
@@ -733,6 +811,13 @@ function WafTree() {
           </div>
         </Panel>
       </ReactFlow>
+      {selectedRule && (
+        <RuleDetailsPopup
+          rule={selectedRule}
+          onClose={() => setSelectedRule(null)}
+          position={popupPosition}
+        />
+      )}
     </div>
   );
 }
