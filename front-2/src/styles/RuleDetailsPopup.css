@@ -19,7 +19,7 @@
   width: 90%;
   max-width: 300px;
   max-height: 400px;
-  overflow-y: hidden; /* הסרת גלילה */
+  overflow-y: scroll; /* הסרת גלילה */
   position: absolute;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   animation: slideIn 0.3s ease-out;

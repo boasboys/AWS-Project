@@ -162,6 +162,20 @@ const RuleDetailsPopup = ({ rule, onClose, position }) => {
           </span>
         </div>
 
+        {/* Warnings Section */}
+        { rule.issues && rule.issues.length > 0 && (
+          <section className="info-section">
+            <h3>⚠️ Warnings</h3>
+            <div className="warnings-container">
+              <ul>
+                {rule.issues.map((issue, idx) => (
+                  <li key={idx} className="warning-item">{issue}</li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        )}
+
         <div className="rule-sections">
           <section className="info-section">
             <h3>🏷️ Added Labels</h3>

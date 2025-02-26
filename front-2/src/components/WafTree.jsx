@@ -18,7 +18,23 @@ import '../styles/WafTree.css';
 import { fetchWafRules } from '../utils/api';
 import RuleDetailsPopup from './RuleDetailsPopup';
 
-// Add custom edge type with better routing
+// ---------------------------
+// Custom Node Component
+// ---------------------------
+const CustomNode = ({ id, data, selected, dragging, style }) => {
+  return (
+    <div className="custom-node" style={style}>
+      {data.issues && data.issues.length > 0 && (
+        <div className="node-warning-icon" title="This rule has issues">⚠️</div>
+      )}
+      <pre className="node-label">{data.label}</pre>
+    </div>
+  );
+};
+
+// ---------------------------
+// Custom Edge Component
+// ---------------------------
 const CustomEdge = ({
   sourceX,
   sourceY,
@@ -31,7 +47,7 @@ const CustomEdge = ({
   const xOffset = Math.abs(targetX - sourceX) * 0.4; // Dynamic offset based on distance
   const isTargetLeft = targetX < sourceX;
 
-  // Create curved path that goes around nodes using quadratic curves
+  // Create curved path using quadratic curves
   const path = `M ${sourceX} ${sourceY}
                 Q ${sourceX + (isTargetLeft ? -xOffset : xOffset)} ${sourceY},
                   ${sourceX + (isTargetLeft ? -xOffset : xOffset)} ${(sourceY + targetY) / 2}
@@ -55,13 +71,15 @@ const CustomEdge = ({
   );
 };
 
-// Layout configuration
+// ---------------------------
+// Layout & Helper Functions
+// ---------------------------
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 const nodeWidth = 350;  // Increased width for more content
 const nodeHeight = 150; // Increased height for more content
 
-// Helper function to format rule information
+// Format rule information for node labels
 const formatRuleInfo = (rule, dependencies = []) => {
   const parts = [
     `${rule.Name}`,
@@ -81,21 +99,18 @@ const formatRuleInfo = (rule, dependencies = []) => {
   return parts.join('\n');
 };
 
-// Update the function to properly handle nested statements including RateBasedStatement
+// Recursively extract label dependencies from rule statements
 const checkStatementsForLabels = (statement) => {
   const dependencies = new Set();
 
   const processStatement = (stmt) => {
     if (!stmt) return;
-
     if (stmt.LabelMatchStatement) {
       dependencies.add(stmt.LabelMatchStatement.Key);
     }
-
     if (stmt.RateBasedStatement && stmt.RateBasedStatement.ScopeDownStatement) {
       processStatement(stmt.RateBasedStatement.ScopeDownStatement);
     }
-
     if (stmt.AndStatement) {
       stmt.AndStatement.Statements.forEach(processStatement);
     }
@@ -111,7 +126,81 @@ const checkStatementsForLabels = (statement) => {
   return dependencies;
 };
 
-// Replace the existing calculateDependencyLevels function with this updated version
+// ---------------------------
+// Rule Validation Function
+// ---------------------------
+const validateRule = (rule, labelMap, allRules, ruleDependencies) => {
+  const issues = [];
+  const usedLabels = checkStatementsForLabels(rule.Statement);
+
+  // Issue 1: Self dependency – rule depends on a label it creates
+  if (rule.RuleLabels) {
+    rule.RuleLabels.forEach(label => {
+      if (usedLabels.has(label.Name)) {
+        issues.push(`Rule depends on the label it creates: "${label.Name}".`);
+      }
+    });
+  }
+
+  // Issue 2: Non-existent dependency – rule depends on a label that no rule provides
+  usedLabels.forEach(label => {
+    if (!labelMap.has(label)) {
+      issues.push(`Depends on non-existent label: "${label}".`);
+    }
+  });
+
+  // Determine if the rule is a blocking rule
+  const isBlock = (rule.Action && Object.keys(rule.Action)[0] === 'Block') ||
+                  (rule.OverrideAction && Object.keys(rule.OverrideAction)[0] === 'Block');
+
+  // NEW ISSUE: Flag all blocking rules as problematic.
+  if (isBlock) {
+    issues.push("Blocking rule detected. Blocking rules can lead to unintended side effects.");
+  }
+
+  // Issue 3: Blocking rule providing labels used by other rules
+  if (isBlock && rule.RuleLabels) {
+    rule.RuleLabels.forEach(label => {
+      allRules.forEach(otherRule => {
+        if (otherRule.Name === rule.Name) return;
+        const otherUsedLabels = checkStatementsForLabels(otherRule.Statement);
+        if (otherUsedLabels.has(label.Name)) {
+          issues.push(`Blocking rule provides label "${label.Name}" which is used by rule "${otherRule.Name}".`);
+        }
+      });
+    });
+  }
+
+  // Issue 4: Circular dependency detection using DFS on ruleDependencies
+  let hasCycle = false;
+  const visited = new Set();
+  const stack = new Set();
+
+  const dfs = (ruleName) => {
+    if (stack.has(ruleName)) {
+      if (ruleName === rule.Name) {
+        hasCycle = true;
+      }
+      return;
+    }
+    if (visited.has(ruleName)) return;
+    visited.add(ruleName);
+    stack.add(ruleName);
+    const deps = ruleDependencies.get(ruleName) || [];
+    deps.forEach(depRuleName => {
+      dfs(depRuleName);
+    });
+    stack.delete(ruleName);
+  };
+  dfs(rule.Name);
+  if (hasCycle) {
+    issues.push('Circular dependency detected.');
+  }
+
+  return issues;
+};
+
+// Calculate dependency levels for layout purposes
 const calculateDependencyLevels = (rules, labelMap) => {
   const levels = new Map();
   const dependenciesMap = new Map();
@@ -122,11 +211,9 @@ const calculateDependencyLevels = (rules, labelMap) => {
     if (processed.has(rule.Name)) {
       return levels.get(rule.Name);
     }
-
     if (visiting.has(rule.Name)) {
       return 0; // Break circular dependencies
     }
-
     visiting.add(rule.Name);
     let maxDependencyLevel = 0;
     const dependencies = new Set();
@@ -138,11 +225,11 @@ const calculateDependencyLevels = (rules, labelMap) => {
     // Store dependencies for the rule
     dependenciesMap.set(rule.Name, Array.from(dependencies));
 
-    // Process each dependency – skip if the label is provided by the same rule
+    // Process each dependency – skip if provided by the same rule
     dependencies.forEach(depLabel => {
       const sourceRules = labelMap.get(depLabel) || [];
       sourceRules.forEach(sourceRule => {
-        if (sourceRule === rule.Name) return; // skip self-dependency
+        if (sourceRule === rule.Name) return;
         if (!path.has(sourceRule)) {
           const sourceRuleObj = rules.find(r => r.Name === sourceRule);
           if (sourceRuleObj) {
@@ -155,12 +242,7 @@ const calculateDependencyLevels = (rules, labelMap) => {
       });
     });
 
-    // If no dependencies, set level to 0 so the rule appears in the first row
-    if (dependencies.size === 0) {
-      levels.set(rule.Name, 0);
-    } else {
-      levels.set(rule.Name, maxDependencyLevel);
-    }
+    levels.set(rule.Name, dependencies.size === 0 ? 0 : maxDependencyLevel);
     processed.add(rule.Name);
     visiting.delete(rule.Name);
     return levels.get(rule.Name);
@@ -175,9 +257,8 @@ const calculateDependencyLevels = (rules, labelMap) => {
   return { levels, dependenciesMap };
 };
 
-// Add after the existing helper functions
+// Utility to calculate text height for node sizing
 const calculateTextHeight = (text, width, fontSize = 14, padding = 15) => {
-  // Create temporary DOM element to measure text
   const temp = document.createElement('div');
   temp.style.width = `${width - (padding * 2)}px`;
   temp.style.fontSize = `${fontSize}px`;
@@ -186,18 +267,13 @@ const calculateTextHeight = (text, width, fontSize = 14, padding = 15) => {
   temp.style.whiteSpace = 'pre-wrap';
   temp.innerHTML = text;
   document.body.appendChild(temp);
-
   const height = temp.offsetHeight;
   document.body.removeChild(temp);
-
-  // Add padding and some buffer space
   return height + (padding * 2) + 10;
 };
 
-// Add this function before isIndependentRule
 const getUsedLabels = (rules) => {
   const usedLabels = new Set();
-
   rules.forEach(rule => {
     const checkStatementsForLabels = (statements) => {
       if (!statements) return;
@@ -213,29 +289,26 @@ const getUsedLabels = (rules) => {
         }
       });
     };
-
     if (rule.Statement) {
-      if (rule.Statement.AndStatement) checkStatementsForLabels(rule.Statement.AndStatement.Statements);
-      else if (rule.Statement.OrStatement) checkStatementsForLabels(rule.Statement.OrStatement.Statements);
-      else if (rule.Statement.NotStatement) checkStatementsForLabels([rule.Statement.NotStatement.Statement]);
+      if (rule.Statement.AndStatement)
+        checkStatementsForLabels(rule.Statement.AndStatement.Statements);
+      else if (rule.Statement.OrStatement)
+        checkStatementsForLabels(rule.Statement.OrStatement.Statements);
+      else if (rule.Statement.NotStatement)
+        checkStatementsForLabels([rule.Statement.NotStatement.Statement]);
       else checkStatementsForLabels([rule.Statement]);
     }
   });
-
   return usedLabels;
 };
 
-// Update isIndependentRule to accept usedLabels parameter
 const isIndependentRule = (rule, usedLabels) => {
-  // If rule adds labels that no one uses, it's still independent
   if (rule.RuleLabels && rule.RuleLabels.length > 0) {
     const addsUnusedLabelsOnly = rule.RuleLabels.every(label => !usedLabels.has(label.Name));
     if (!addsUnusedLabelsOnly) {
       return false;
     }
   }
-
-  // Check if rule depends on any labels
   const hasLabelDependency = (statements) => {
     if (!statements) return false;
     return statements.some(stmt => {
@@ -246,33 +319,30 @@ const isIndependentRule = (rule, usedLabels) => {
       return false;
     });
   };
-
   if (rule.Statement) {
-    if (rule.Statement.AndStatement) {
+    if (rule.Statement.AndStatement)
       return !hasLabelDependency(rule.Statement.AndStatement.Statements);
-    }
-    if (rule.Statement.OrStatement) {
+    if (rule.Statement.OrStatement)
       return !hasLabelDependency(rule.Statement.OrStatement.Statements);
-    }
-    if (rule.Statement.NotStatement) {
+    if (rule.Statement.NotStatement)
       return !hasLabelDependency([rule.Statement.NotStatement.Statement]);
-    }
     return !hasLabelDependency([rule.Statement]);
   }
-
   return true;
 };
 
-// Update the processWafRules function to properly create edges
+// ---------------------------
+// Process & Layout WAF Rules
+// ---------------------------
 const processWafRules = (data) => {
   const rules = data[0].Rules;
   const nodes = [];
   const edges = [];
   const labelMap = new Map();
-  const labelProviders = new Map(); // Map to track which rules provide which labels
-  const ruleDependencies = new Map(); // Map to track direct dependencies between rules
+  const labelProviders = new Map();
+  const ruleDependencies = new Map();
 
-  // First pass: track all labels and their source rules
+  // First pass: Build label map and providers.
   rules.forEach((rule) => {
     if (rule.RuleLabels) {
       rule.RuleLabels.forEach(label => {
@@ -280,27 +350,22 @@ const processWafRules = (data) => {
           labelMap.set(label.Name, []);
         }
         labelMap.get(label.Name).push(rule.Name);
-        
-        // Track which rule provides this label
         labelProviders.set(label.Name, rule.Name);
       });
     }
   });
 
-  // Second pass: build direct rule dependencies
+  // Second pass: Build direct rule dependencies.
   rules.forEach((rule) => {
     const dependencies = new Set();
     const processStatement = (stmt) => {
       if (!stmt) return;
-
       if (stmt.LabelMatchStatement) {
         const labelProvider = labelProviders.get(stmt.LabelMatchStatement.Key);
-        // אם התווית מסופקת על ידי אותו חוק – דלג
         if (labelProvider && labelProvider !== rule.Name) {
           dependencies.add(labelProvider);
         }
       }
-
       if (stmt.RateBasedStatement?.ScopeDownStatement) {
         processStatement(stmt.RateBasedStatement.ScopeDownStatement);
       }
@@ -314,36 +379,12 @@ const processWafRules = (data) => {
         processStatement(stmt.NotStatement.Statement);
       }
     };
-
     processStatement(rule.Statement);
     ruleDependencies.set(rule.Name, Array.from(dependencies));
   });
 
-  // Calculate levels ensuring dependent rules are below their dependencies
-  const levels = new Map();
-  const calculateLevel = (ruleName, visited = new Set()) => {
-    if (levels.has(ruleName)) return levels.get(ruleName);
-    if (visited.has(ruleName)) return 0;
-
-    visited.add(ruleName);
-    const dependencies = ruleDependencies.get(ruleName) || [];
-    
-    if (dependencies.length === 0) {
-      levels.set(ruleName, 0);
-      return 0;
-    }
-
-    let maxLevel = -1;
-    dependencies.forEach(dep => {
-      const depLevel = calculateLevel(dep, new Set(visited));
-      maxLevel = Math.max(maxLevel, depLevel + 1);
-    });
-
-    levels.set(ruleName, maxLevel);
-    return maxLevel;
-  };
-
-  rules.forEach(rule => calculateLevel(rule.Name));
+  // Calculate levels for layout
+  const { levels } = calculateDependencyLevels(rules, labelMap);
 
   // Group rules by level
   const nodesByLevel = new Map();
@@ -355,45 +396,57 @@ const processWafRules = (data) => {
     nodesByLevel.get(level).push(rule);
   });
 
-  // Calculate positions and create nodes
+  // Validate each rule and store issues
+  const ruleIssuesMap = new Map();
+  rules.forEach(rule => {
+    const issues = validateRule(rule, labelMap, rules, ruleDependencies);
+    ruleIssuesMap.set(rule.Name, issues);
+  });
+
+  // Layout the nodes
   const levelHeight = 200;
   const horizontalGap = 50;
   const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b);
 
   sortedLevels.forEach((level) => {
     const levelRules = nodesByLevel.get(level);
-    const y = (level + 1) * levelHeight; // Add 1 to shift everything down
+    const y = (level + 1) * levelHeight; // shift down a bit
     const totalWidth = levelRules.length * (nodeWidth + horizontalGap);
     const startX = (window.innerWidth - totalWidth) / 2;
 
     levelRules.forEach((rule, index) => {
       const x = startX + index * (nodeWidth + horizontalGap);
       const dependencies = checkStatementsForLabels(rule.Statement);
-
       const action = rule.Action ? Object.keys(rule.Action)[0] :
-        rule.OverrideAction ? Object.keys(rule.OverrideAction)[0] : 'None';
-
+                     rule.OverrideAction ? Object.keys(rule.OverrideAction)[0] : 'None';
       const label = formatRuleInfo(rule, Array.from(dependencies));
       const calculatedHeight = calculateTextHeight(label, nodeWidth);
       const finalHeight = Math.max(nodeHeight, calculatedHeight);
-
+      const issues = ruleIssuesMap.get(rule.Name) || [];
+      const baseStyle = getNodeStyle(action);
+      let nodeStyle = {
+        ...baseStyle,
+        padding: 15,
+        borderRadius: 10,
+        width: nodeWidth,
+        height: finalHeight,
+        fontSize: '14px',
+        whiteSpace: 'pre-wrap',
+        textAlign: 'left',
+      };
+      // Add a red frame if there are issues.
+      if (issues.length > 0) {
+        nodeStyle = { ...nodeStyle, border: '4px solid red' };
+      }
       const newNode = {
         id: rule.Name,
-        data: { label },
+        type: 'custom-node', // Use our custom node type
+        data: { label, issues },
         position: { x, y },
-        style: {
-          ...getNodeStyle(action),
-          padding: 15,
-          borderRadius: 10,
-          width: nodeWidth,
-          height: finalHeight,
-          fontSize: '14px',
-          whiteSpace: 'pre-wrap',
-          textAlign: 'left',
-        },
+        style: nodeStyle,
         sourcePosition: 'bottom',
         targetPosition: 'top',
-        rule: rule, // store the full rule data
+        rule: { ...rule, issues },
       };
       nodes.push(newNode);
 
@@ -455,11 +508,18 @@ const getNodeStyle = (action) => {
   }
 };
 
-// Define edgeTypes outside of the component
+// Define node and edge types
+const nodeTypes = {
+  'custom-node': CustomNode,
+};
+
 const edgeTypes = {
   'custom-edge': CustomEdge,
 };
 
+// ---------------------------
+// Main WafTree Component
+// ---------------------------
 function WafTree() {
   const navigate = useNavigate();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -474,6 +534,7 @@ function WafTree() {
   const [searchText, setSearchText] = useState('');
   const [filteredNodes, setFilteredNodes] = useState([]);
   const [filteredEdges, setFilteredEdges] = useState([]);
+  const [showGlobalProblems, setShowGlobalProblems] = useState(false);
 
   const highlightConnectedEdges = useCallback((nodeId, shouldHighlight) => {
     const connectedEdges = edges.map(edge => ({
@@ -487,14 +548,14 @@ function WafTree() {
   }, [edges, setEdges]);
 
   const onNodeMouseEnter = useCallback((event, node) => {
-    if (!clickedNode) {  // Only highlight on hover if no node is clicked
+    if (!clickedNode) {  
       highlightConnectedEdges(node.id, true);
       setHighlightedNode(node.id);
     }
   }, [highlightConnectedEdges, clickedNode]);
 
   const onNodeMouseLeave = useCallback(() => {
-    if (!clickedNode) {  // Only remove highlight on leave if no node is clicked
+    if (!clickedNode) {  
       highlightConnectedEdges(null, false);
       setHighlightedNode(null);
     }
@@ -514,13 +575,11 @@ function WafTree() {
         y: rect.bottom + window.scrollY
       });
     }
-
-    // Find and set the selected rule
     const rule = nodes.find(n => n.id === node.id)?.rule;
     setSelectedRule(rule);
   }, [clickedNode, highlightConnectedEdges, nodes]);
 
-  // Add file upload handler
+  // Handle file upload to load JSON data
   const handleFileUpload = useCallback((event) => {
     const file = event.target.files[0];
     if (file) {
@@ -540,7 +599,7 @@ function WafTree() {
       };
       reader.readAsText(file);
     }
-  }, []);
+  }, [setNodes, setEdges]);
 
   const downloadImage = useCallback(async (format) => {
     if (!flowRef.current) return;
@@ -551,45 +610,23 @@ function WafTree() {
       let dataUrl;
       const options = {
         backgroundColor: '#f8f9fa',
-        scale: 4, // Increased scale for better quality
-        pixelRatio: 3, // Increased pixel ratio for better sharpness
-        useCORS: true // Enable cross-origin resource sharing
+        scale: 4,
+        pixelRatio: 3,
+        useCORS: true
       };
 
       if (format === 'pdf') {
-        // Create high-quality JPEG first
-        const jpegUrl = await toJpeg(element, {
-          ...options,
-          quality: 1.0
-        });
-
-        // Load image to get dimensions
+        const jpegUrl = await toJpeg(element, { ...options, quality: 1.0 });
         const img = new Image();
         img.src = jpegUrl;
-        await new Promise(resolve => {
-          img.onload = resolve;
-        });
-
-        // Create PDF with proper dimensions
+        await new Promise(resolve => { img.onload = resolve; });
         const pdf = new jsPDF({
           orientation: img.width > img.height ? 'landscape' : 'portrait',
           unit: 'px',
           format: [img.width, img.height],
-          compress: false // Disable compression for better quality
+          compress: false
         });
-
-        // Add image with high quality
-        pdf.addImage(
-          jpegUrl,
-          'JPEG',
-          0,
-          0,
-          img.width,
-          img.height,
-          undefined,
-          'NONE' // No compression
-        );
-
+        pdf.addImage(jpegUrl, 'JPEG', 0, 0, img.width, img.height, undefined, 'NONE');
         pdf.save('waf-rules.pdf');
       } else {
         switch (format) {
@@ -639,7 +676,6 @@ function WafTree() {
       setFilteredEdges(edges);
       return;
     }
-
     const term = searchTerm.toLowerCase();
     const matchingNodes = nodes.filter(node => {
       const rule = node.rule;
@@ -647,30 +683,22 @@ function WafTree() {
         node.data.label.toLowerCase(),
         rule.Name.toLowerCase(),
         rule.RuleLabels?.map(l => l.Name.toLowerCase()).join(' ') || '',
-        // Add more fields to search through if needed
       ].join(' ');
-
       return nodeText.includes(term);
     });
-
     const matchingNodeIds = new Set(matchingNodes.map(node => node.id));
-
-    // Keep edges that connect matching nodes
     const relevantEdges = edges.filter(edge => 
       matchingNodeIds.has(edge.source) && matchingNodeIds.has(edge.target)
     );
-
     setFilteredNodes(matchingNodes);
     setFilteredEdges(relevantEdges);
   }, [nodes, edges]);
 
-  useEffect(() => {
-    filterGraph(searchText);
-  }, [searchText, filterGraph]);
+  useEffect(() => { filterGraph(searchText); }, [searchText, filterGraph]);
+  useEffect(() => { fetchServerRules(); }, [fetchServerRules]);
 
-  useEffect(() => {
-    fetchServerRules();
-  }, [fetchServerRules]);
+  // Global list of nodes with issues (for the global warning indicator)
+  const problemNodes = nodes.filter(node => node.data.issues && node.data.issues.length > 0);
 
   return (
     <div className={`waf-container ${isDarkMode ? 'dark' : 'light'}`}>
@@ -680,7 +708,6 @@ function WafTree() {
           ...node,
           style: {
             ...node.style,
-            // Add subtle highlight effect for clicked nodes
             boxShadow: node.id === clickedNode ?
               '0 0 0 4px rgba(255, 255, 255, 0.8), 0 4px 6px rgba(0, 0, 0, 0.3)' :
               node.style.boxShadow
@@ -689,7 +716,8 @@ function WafTree() {
         edges={filteredEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        edgeTypes={edgeTypes}  // Use the constant defined outside
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         defaultEdgeOptions={{
           type: 'custom-edge',
           animated: true,
@@ -703,7 +731,6 @@ function WafTree() {
         style={{
           background: isDarkMode ? '#1a1a1a' : '#f8f9fa',
         }}
-        // Allow further zooming out by lowering the minimum zoom
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={true}
@@ -724,16 +751,10 @@ function WafTree() {
 
         <Panel position="top-left">
           <div className="button-container">
-            <button
-              onClick={() => navigate('/home')}
-              className="waf-button"
-            >
+            <button onClick={() => navigate('/home')} className="waf-button">
               Back to Home
             </button>
-            <button
-              onClick={toggleTheme}
-              className={`theme-button ${isDarkMode ? 'dark' : 'light'}`}
-            >
+            <button onClick={toggleTheme} className={`theme-button ${isDarkMode ? 'dark' : 'light'}`}>
               {isDarkMode ? '☀️ Light' : '🌙 Dark'}
             </button>
           </div>
@@ -749,10 +770,7 @@ function WafTree() {
               className="search-input"
             />
             {searchText && (
-              <button
-                onClick={() => setSearchText('')}
-                className="clear-search"
-              >
+              <button onClick={() => setSearchText('')} className="clear-search">
                 ×
               </button>
             )}
@@ -762,10 +780,7 @@ function WafTree() {
         <Panel position="top-right">
           <div className="button-container">
             <div>
-              <button
-                onClick={() => document.getElementById('fileInput').click()}
-                className="waf-button"
-              >
+              <button onClick={() => document.getElementById('fileInput').click()} className="waf-button">
                 Upload JSON
               </button>
               <input
@@ -776,41 +791,54 @@ function WafTree() {
                 style={{ display: 'none' }}
               />
             </div>
-            
-            <button
-              onClick={fetchServerRules}
-              className="waf-button"
-            >
+            <button onClick={fetchServerRules} className="waf-button">
               Fetch Server Rules
             </button>
-
             <div>
-              <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
-                className="waf-button"
-              >
+              <button onClick={() => setShowExportMenu(!showExportMenu)} className="waf-button">
                 Export
               </button>
               {showExportMenu && (
                 <div className="export-menu">
-                  <button onClick={() => downloadImage('pdf')} className="export-option">
-                    PDF
-                  </button>
-                  <button onClick={() => downloadImage('png')} className="export-option">
-                    PNG
-                  </button>
-                  <button onClick={() => downloadImage('jpg')} className="export-option">
-                    JPG
-                  </button>
-                  <button onClick={() => downloadImage('svg')} className="export-option">
-                    SVG
-                  </button>
+                  <button onClick={() => downloadImage('pdf')} className="export-option">PDF</button>
+                  <button onClick={() => downloadImage('png')} className="export-option">PNG</button>
+                  <button onClick={() => downloadImage('jpg')} className="export-option">JPG</button>
+                  <button onClick={() => downloadImage('svg')} className="export-option">SVG</button>
                 </div>
               )}
             </div>
           </div>
         </Panel>
       </ReactFlow>
+
+      {/* Global Warning Triangle with Count Badge (Bottom Right) */}
+      {problemNodes.length > 0 && (
+        <div className="global-warning" onClick={() => setShowGlobalProblems(!showGlobalProblems)}>
+          <span role="img" aria-label="warning">⚠️</span>
+          <span className="global-warning-count">{problemNodes.length}</span>
+        </div>
+      )}
+
+      {/* Global Problems Popup */}
+      {showGlobalProblems && (
+        <div className="global-problems-popup">
+          <h3>Rules with Issues</h3>
+          <ul>
+            {problemNodes.map(node => (
+              <li key={node.id}>
+                <strong>{node.id}</strong>
+                <ul>
+                  {node.data.issues.map((issue, idx) => (
+                    <li key={idx}>{issue}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+          <button onClick={() => setShowGlobalProblems(false)}>Close</button>
+        </div>
+      )}
+
       {selectedRule && (
         <RuleDetailsPopup
           rule={selectedRule}
