@@ -1,0 +1,85 @@
+{
+  "hash": "45eca6e2",
+  "configHash": "d68d1c2e",
+  "lockfileHash": "816c8097",
+  "browserHash": "0448e692",
+  "optimized": {
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "53842d01",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "7c6aea26",
+      "needsInterop": true
+    },
+    "@mui/material": {
+      "src": "../../node_modules/@mui/material/index.js",
+      "file": "@mui_material.js",
+      "fileHash": "7fdf44d7",
+      "needsInterop": false
+    },
+    "@mui/icons-material/ArrowBack": {
+      "src": "../../node_modules/@mui/icons-material/esm/ArrowBack.js",
+      "file": "@mui_icons-material_ArrowBack.js",
+      "fileHash": "8980b165",
+      "needsInterop": false
+    },
+    "@mui/icons-material/Assessment": {
+      "src": "../../node_modules/@mui/icons-material/esm/Assessment.js",
+      "file": "@mui_icons-material_Assessment.js",
+      "fileHash": "fc13dbbf",
+      "needsInterop": false
+    },
+    "axios": {
+      "src": "../../node_modules/axios/index.js",
+      "file": "axios.js",
+      "fileHash": "02f67943",
+      "needsInterop": false
+    },
+    "reactflow": {
+      "src": "../../node_modules/reactflow/dist/esm/index.mjs",
+      "file": "reactflow.js",
+      "fileHash": "4be45d63",
+      "needsInterop": false
+    },
+    "dagre": {
+      "src": "../../node_modules/dagre/index.js",
+      "file": "dagre.js",
+      "fileHash": "15957fd3",
+      "needsInterop": true
+    },
+    "@mui/icons-material/CheckCircle": {
+      "src": "../../node_modules/@mui/icons-material/esm/CheckCircle.js",
+      "file": "@mui_icons-material_CheckCircle.js",
+      "fileHash": "3233fa5b",
+      "needsInterop": false
+    },
+    "@mui/icons-material/Error": {
+      "src": "../../node_modules/@mui/icons-material/esm/Error.js",
+      "file": "@mui_icons-material_Error.js",
+      "fileHash": "46ba4cc9",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-C6WWHQR7": {
+      "file": "chunk-C6WWHQR7.js"
+    },
+    "chunk-UDJDQMPQ": {
+      "file": "chunk-UDJDQMPQ.js"
+    },
+    "chunk-QWBLDAVI": {
+      "file": "chunk-QWBLDAVI.js"
+    },
+    "chunk-KDSJEEE7": {
+      "file": "chunk-KDSJEEE7.js"
+    },
+    "chunk-2TUXWMP5": {
+      "file": "chunk-2TUXWMP5.js"
+    }
+  }
+}

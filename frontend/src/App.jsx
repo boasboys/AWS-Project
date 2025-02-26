@@ -123,92 +123,10 @@ export default function App() {
       <CssBaseline />
 
       {/* Mini-variant drawer with hover expand */}
-      <Drawer
-        variant="permanent"
-        open={open}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        {/* 
-          Top bar: user icon aligned with other icons
-        */}
-        <Toolbar
-          sx={{
-            position: "relative",
-            display: "flex",
-            alignItems: "center",
-            height: theme.spacing(8), // ~64px
-            px: 2.5 // match ListItemButton padding
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: open ? "initial" : "center",
-              width: "100%"
-            }}
-          >
-            <AccountCircleIcon
-              sx={{
-                minWidth: 0,
-                mr: open ? 2 : "auto",
-                fontSize: 32 // Increased size
-              }}
-            />
-            {open && (
-              <Typography variant="subtitle1" noWrap>
-                John Doe
-              </Typography>
-            )}
-          </Box>
-        </Toolbar>
-        <Divider />
-
-        <List>
-          {navItems.map((item) => {
-            // If item.link is defined, navigate directly to item.link
-            const listItemProps = item.link
-              ? { component: Link, to: item.link }
-              : {
-                onClick: () => setView(item.key),
-                selected: view === item.key
-              };
-
-            return (
-              <ListItemButton
-                key={item.key}
-                sx={{
-                  minHeight: 48,
-                  justifyContent: open ? "initial" : "center",
-                  px: 2.5
-                }}
-                {...listItemProps}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: 0,
-                    mr: open ? 2 : "auto",
-                    justifyContent: "center"
-                  }}
-                >
-                  {item.icon}
-                </ListItemIcon>
-                {/* Label only when open */}
-                {open && (
-                  <ListItemText
-                    primary={item.label}
-                    sx={{ opacity: open ? 1 : 0 }}
-                  />
-                )}
-              </ListItemButton>
-            );
-          })}
-        </List>
-      </Drawer>
+      
 
       {/* MAIN CONTENT AREA */}
-      <Box
+      {/* <Box
         component="main"
         sx={{
           flexGrow: 1,
@@ -219,11 +137,11 @@ export default function App() {
             : parseInt(theme.spacing(8), 10) + 1
             }px)`
         }}
-      >
+      > */}
         
         
-        {renderContent()}
+        <WAFRuleTree />;
       </Box>
-    </Box>
+    // </Box>
   );
 }
