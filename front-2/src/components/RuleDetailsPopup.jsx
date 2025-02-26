@@ -3,6 +3,7 @@ import '../styles/RuleDetailsPopup.css';
 
 const RuleDetailsPopup = ({ rule, onClose, position }) => {
   const [popupStyle, setPopupStyle] = useState({});
+  const [viewMode, setViewMode] = useState("details");
 
   useEffect(() => {
     if (position) {
@@ -149,6 +150,21 @@ const RuleDetailsPopup = ({ rule, onClose, position }) => {
       >
         <button className="close-button" onClick={onClose}>×</button>
         
+        <div className="popup-menu">
+          <button 
+            className={viewMode === "details" ? "active" : ""}
+            onClick={() => setViewMode("details")}
+          >
+            Details
+          </button>
+          <button 
+            className={viewMode === "json" ? "active" : ""}
+            onClick={() => setViewMode("json")}
+          >
+            JSON
+          </button>
+        </div>
+
         <div className="rule-header">
           <h2>{rule.Name}</h2>
           <span className={`priority-badge priority-${Math.floor(rule.Priority / 100)}`}>
@@ -176,52 +192,58 @@ const RuleDetailsPopup = ({ rule, onClose, position }) => {
           </section>
         )}
 
-        <div className="rule-sections">
-          <section className="info-section">
-            <h3>🏷️ Added Labels</h3>
-            <div className="labels-container">
-              {addedLabels.length > 0 ? (
-                addedLabels.map(label => (
-                  <span key={label} className="label-chip added">
-                    {label}
-                  </span>
-                ))
-              ) : (
-                <p className="no-data">No labels added by this rule</p>
-              )}
-            </div>
-          </section>
+        { viewMode === "details" ? (
+          <div className="rule-sections">
+            <section className="info-section">
+              <h3>🏷️ Added Labels</h3>
+              <div className="labels-container">
+                {addedLabels.length > 0 ? (
+                  addedLabels.map(label => (
+                    <span key={label} className="label-chip added">
+                      {label}
+                    </span>
+                  ))
+                ) : (
+                  <p className="no-data">No labels added by this rule</p>
+                )}
+              </div>
+            </section>
 
-          <section className="info-section">
-            <h3>🔗 Dependent Labels</h3>
-            <div className="labels-container">
-              {dependentLabels.length > 0 ? (
-                dependentLabels.map(label => (
-                  <span key={label} className="label-chip dependent">
-                    {label}
-                  </span>
-                ))
-              ) : (
-                <p className="no-data">No label dependencies</p>
-              )}
-            </div>
-          </section>
+            <section className="info-section">
+              <h3>🔗 Dependent Labels</h3>
+              <div className="labels-container">
+                {dependentLabels.length > 0 ? (
+                  dependentLabels.map(label => (
+                    <span key={label} className="label-chip dependent">
+                      {label}
+                    </span>
+                  ))
+                ) : (
+                  <p className="no-data">No label dependencies</p>
+                )}
+              </div>
+            </section>
 
-          <section className="info-section">
-            <h3>📜 Headers Used</h3>
-            <div className="headers-container">
-              {headers.length > 0 ? (
-                headers.map(header => (
-                  <span key={header} className="header-chip">
-                    {header}
-                  </span>
-                ))
-              ) : (
-                <p className="no-data">No headers used in this rule</p>
-              )}
-            </div>
-          </section>
-        </div>
+            <section className="info-section">
+              <h3>📜 Headers Used</h3>
+              <div className="headers-container">
+                {headers.length > 0 ? (
+                  headers.map(header => (
+                    <span key={header} className="header-chip">
+                      {header}
+                    </span>
+                  ))
+                ) : (
+                  <p className="no-data">No headers used in this rule</p>
+                )}
+              </div>
+            </section>
+          </div>
+        ) : (
+          <div className="json-view">
+            <pre>{JSON.stringify(rule, null, 2)}</pre>
+          </div>
+        )}
       </div>
     </div>
   );

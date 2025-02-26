@@ -4,6 +4,7 @@ import {
   Background,
   Controls,
   Panel,
+  Handle,
   useNodesState,
   useEdgesState,
   MarkerType,
@@ -19,18 +20,9 @@ import { fetchWafRules } from '../utils/api';
 import RuleDetailsPopup from './RuleDetailsPopup';
 
 // ---------------------------
-// Custom Node Component
+// Custom Node Component (with default handles)
 // ---------------------------
-const CustomNode = ({ id, data, selected, dragging, style }) => {
-  return (
-    <div className="custom-node" style={style}>
-      {data.issues && data.issues.length > 0 && (
-        <div className="node-warning-icon" title="This rule has issues">⚠️</div>
-      )}
-      <pre className="node-label">{data.label}</pre>
-    </div>
-  );
-};
+import CustomNode from './component2/Customnode';
 
 // ---------------------------
 // Custom Edge Component
@@ -42,20 +34,18 @@ const CustomEdge = ({
   targetY,
   style = {},
   markerEnd,
-  data
+  data,
 }) => {
-  const xOffset = Math.abs(targetX - sourceX) * 0.4; // Dynamic offset based on distance
-  const isTargetLeft = targetX < sourceX;
-
-  // Create curved path using quadratic curves
-  const path = `M ${sourceX} ${sourceY}
-                Q ${sourceX + (isTargetLeft ? -xOffset : xOffset)} ${sourceY},
-                  ${sourceX + (isTargetLeft ? -xOffset : xOffset)} ${(sourceY + targetY) / 2}
-                Q ${sourceX + (isTargetLeft ? -xOffset : xOffset)} ${targetY},
-                  ${targetX} ${targetY}`;
-
+  const offset = data?.offset || 0;
+  const midY = (sourceY + targetY) / 2 + offset;
+  // נתיב קובטי (Cubic Bezier) עם אופסט לעקיפת נודים
+  const path = `M ${sourceX} ${sourceY} C ${sourceX} ${midY}, ${targetX} ${midY}, ${targetX} ${targetY}`;
+  
   const isHighlighted = data?.isHighlighted;
-
+  const strokeColor = data?.permanentIssue 
+    ? '#ff0000' 
+    : (isHighlighted ? '#00FF00' : (style.stroke || '#888'));
+  
   return (
     <BaseEdge
       path={path}
@@ -63,9 +53,9 @@ const CustomEdge = ({
       style={{
         ...style,
         strokeWidth: isHighlighted ? 4 : 2,
-        stroke: isHighlighted ? '#ff3d00' : style.stroke,
+        stroke: strokeColor,
         transition: 'all 0.3s ease-in-out',
-        opacity: isHighlighted ? 1 : 0.5,
+        opacity: 1,
       }}
     />
   );
@@ -79,7 +69,6 @@ dagreGraph.setDefaultEdgeLabel(() => ({}));
 const nodeWidth = 350;  // Increased width for more content
 const nodeHeight = 150; // Increased height for more content
 
-// Format rule information for node labels
 const formatRuleInfo = (rule, dependencies = []) => {
   const parts = [
     `${rule.Name}`,
@@ -99,7 +88,7 @@ const formatRuleInfo = (rule, dependencies = []) => {
   return parts.join('\n');
 };
 
-// Recursively extract label dependencies from rule statements
+// בודק את ההצהרה ומחזיר סט של תוויות בהן נעשה שימוש
 const checkStatementsForLabels = (statement) => {
   const dependencies = new Set();
 
@@ -108,7 +97,7 @@ const checkStatementsForLabels = (statement) => {
     if (stmt.LabelMatchStatement) {
       dependencies.add(stmt.LabelMatchStatement.Key);
     }
-    if (stmt.RateBasedStatement && stmt.RateBasedStatement.ScopeDownStatement) {
+    if (stmt.RateBasedStatement?.ScopeDownStatement) {
       processStatement(stmt.RateBasedStatement.ScopeDownStatement);
     }
     if (stmt.AndStatement) {
@@ -126,56 +115,60 @@ const checkStatementsForLabels = (statement) => {
   return dependencies;
 };
 
-// ---------------------------
-// Rule Validation Function
-// ---------------------------
+// פונקציה לאימות חוק יחיד לפי כללי התקינות
 const validateRule = (rule, labelMap, allRules, ruleDependencies) => {
   const issues = [];
+  
+  // בדיקת שדות חובה
+  if (!rule.Name) {
+    issues.push('Missing required field: Name.');
+  }
+  if (!rule.Action) {
+    issues.push('Missing required field: Action.');
+  }
+
   const usedLabels = checkStatementsForLabels(rule.Statement);
 
-  // Issue 1: Self dependency – rule depends on a label it creates
+  // בדיקה של תלות עצמית - אם החוק מייצר תווית ומשתמש בה
   if (rule.RuleLabels) {
     rule.RuleLabels.forEach(label => {
       if (usedLabels.has(label.Name)) {
-        issues.push(`Rule depends on the label it creates: "${label.Name}".`);
+        issues.push(`Rule "${rule.Name}" depends on the label it creates: "${label.Name}".`);
       }
     });
   }
 
-  // Issue 2: Non-existent dependency – rule depends on a label that no rule provides
+  // בדיקת תלות חסרה - אם החוק מתייחס לתווית שלא נוצרת על ידי אף חוק
   usedLabels.forEach(label => {
     if (!labelMap.has(label)) {
-      issues.push(`Depends on non-existent label: "${label}".`);
+      issues.push(`Rule "${rule.Name}" depends on non-existent label: "${label}".`);
     }
   });
 
-  // Determine if the rule is a blocking rule
-  const isBlock = (rule.Action && Object.keys(rule.Action)[0] === 'Block') ||
-                  (rule.OverrideAction && Object.keys(rule.OverrideAction)[0] === 'Block');
+  // בדיקת תלות לא תקינה - אם החוק תלוי בחוק שמבצע Block או Allow
+  const dependencies = ruleDependencies.get(rule.Name) || [];
+  dependencies.forEach(depRuleName => {
+    const depRule = allRules.find(r => r.Name === depRuleName);
+    if (depRule && depRule.Action) {
+      const depAction = Object.keys(depRule.Action)[0];
+      if (depAction === 'Block' || depAction === 'Allow') {
+        issues.push(`Rule "${rule.Name}" depends on "${depRuleName}" which has action "${depAction}".`);
+      }
+    }
+  });
 
-  // NEW ISSUE: Flag all blocking rules as problematic.
-  if (isBlock) {
-    issues.push("Blocking rule detected. Blocking rules can lead to unintended side effects.");
-  }
+  // בדיקת עדיפות - אם חוק תלוי בחוק שיש לו עדיפות גבוהה יותר (מספר עדיפות גבוה יותר)
+  dependencies.forEach(depRuleName => {
+    const depRule = allRules.find(r => r.Name === depRuleName);
+    if (depRule && rule.Priority < depRule.Priority) {
+      issues.push(`Priority error: Rule "${rule.Name}" (priority ${rule.Priority}) depends on "${depRuleName}" (priority ${depRule.Priority}).`);
+    }
+  });
 
-  // Issue 3: Blocking rule providing labels used by other rules
-  if (isBlock && rule.RuleLabels) {
-    rule.RuleLabels.forEach(label => {
-      allRules.forEach(otherRule => {
-        if (otherRule.Name === rule.Name) return;
-        const otherUsedLabels = checkStatementsForLabels(otherRule.Statement);
-        if (otherUsedLabels.has(label.Name)) {
-          issues.push(`Blocking rule provides label "${label.Name}" which is used by rule "${otherRule.Name}".`);
-        }
-      });
-    });
-  }
-
-  // Issue 4: Circular dependency detection using DFS on ruleDependencies
+  // בדיקת מעגליות (תלות מעגלית)
   let hasCycle = false;
   const visited = new Set();
   const stack = new Set();
-
   const dfs = (ruleName) => {
     if (stack.has(ruleName)) {
       if (ruleName === rule.Name) {
@@ -194,13 +187,44 @@ const validateRule = (rule, labelMap, allRules, ruleDependencies) => {
   };
   dfs(rule.Name);
   if (hasCycle) {
-    issues.push('Circular dependency detected.');
+    issues.push(`Circular dependency detected in rule "${rule.Name}".`);
+  }
+
+  // בדיקת כלל מיותר - אם לכלל יש את אותה פעולה והתוויות שלו הן תת-קבוצה של כלל אחר עם עדיפות גבוהה יותר
+  allRules.forEach(otherRule => {
+    if (otherRule.Name === rule.Name) return;
+    const action1 = rule.Action ? Object.keys(rule.Action)[0] : 'None';
+    const action2 = otherRule.Action ? Object.keys(otherRule.Action)[0] : 'None';
+    if (action1 === action2) {
+      const ruleLabels = rule.RuleLabels ? rule.RuleLabels.map(l => l.Name) : [];
+      const otherLabels = otherRule.RuleLabels ? otherRule.RuleLabels.map(l => l.Name) : [];
+      const isSubset = ruleLabels.every(lbl => otherLabels.includes(lbl));
+      if (isSubset && rule.Priority < otherRule.Priority) {
+        issues.push(`Redundant rule: "${rule.Name}" is redundant due to higher priority rule "${otherRule.Name}".`);
+      }
+    }
+  });
+
+  // בדיקת שכפול תוויות - אם אותה תווית נוצרת על ידי מספר חוקים
+  if (rule.RuleLabels) {
+    rule.RuleLabels.forEach(label => {
+      const providers = labelMap.get(label.Name) || [];
+      if (providers.length > 1) {
+        issues.push(`Duplicate label: Label "${label.Name}" is produced by multiple rules: ${providers.join(', ')}.`);
+      }
+    });
+  }
+
+  // הודעה על חוק חסום (Block)
+  const isBlock = (rule.Action && Object.keys(rule.Action)[0] === 'Block') ||
+                  (rule.OverrideAction && Object.keys(rule.OverrideAction)[0] === 'Block');
+  if (isBlock) {
+    issues.push("Blocking rule detected. Blocking rules can lead to unintended side effects.");
   }
 
   return issues;
 };
 
-// Calculate dependency levels for layout purposes
 const calculateDependencyLevels = (rules, labelMap) => {
   const levels = new Map();
   const dependenciesMap = new Map();
@@ -212,26 +236,20 @@ const calculateDependencyLevels = (rules, labelMap) => {
       return levels.get(rule.Name);
     }
     if (visiting.has(rule.Name)) {
-      return 0; // Break circular dependencies
+      return 0;
     }
     visiting.add(rule.Name);
     let maxDependencyLevel = 0;
     const dependencies = new Set();
-
-    // Get direct dependencies from statements
     const labels = checkStatementsForLabels(rule.Statement);
     labels.forEach(depLabel => dependencies.add(depLabel));
-
-    // Store dependencies for the rule
     dependenciesMap.set(rule.Name, Array.from(dependencies));
-
-    // Process each dependency – skip if provided by the same rule
     dependencies.forEach(depLabel => {
       const sourceRules = labelMap.get(depLabel) || [];
-      sourceRules.forEach(sourceRule => {
-        if (sourceRule === rule.Name) return;
-        if (!path.has(sourceRule)) {
-          const sourceRuleObj = rules.find(r => r.Name === sourceRule);
+      sourceRules.forEach(sourceRuleName => {
+        if (sourceRuleName === rule.Name) return;
+        if (!path.has(sourceRuleName)) {
+          const sourceRuleObj = rules.find(r => r.Name === sourceRuleName);
           if (sourceRuleObj) {
             const newPath = new Set(path);
             newPath.add(rule.Name);
@@ -241,7 +259,6 @@ const calculateDependencyLevels = (rules, labelMap) => {
         }
       });
     });
-
     levels.set(rule.Name, dependencies.size === 0 ? 0 : maxDependencyLevel);
     processed.add(rule.Name);
     visiting.delete(rule.Name);
@@ -257,7 +274,6 @@ const calculateDependencyLevels = (rules, labelMap) => {
   return { levels, dependenciesMap };
 };
 
-// Utility to calculate text height for node sizing
 const calculateTextHeight = (text, width, fontSize = 14, padding = 15) => {
   const temp = document.createElement('div');
   temp.style.width = `${width - (padding * 2)}px`;
@@ -275,28 +291,28 @@ const calculateTextHeight = (text, width, fontSize = 14, padding = 15) => {
 const getUsedLabels = (rules) => {
   const usedLabels = new Set();
   rules.forEach(rule => {
-    const checkStatementsForLabels = (statements) => {
+    const checkStatementsForLabelsLocal = (statements) => {
       if (!statements) return;
       statements.forEach(stmt => {
         if (stmt.LabelMatchStatement) {
           usedLabels.add(stmt.LabelMatchStatement.Key);
         } else if (stmt.AndStatement) {
-          checkStatementsForLabels(stmt.AndStatement.Statements);
+          checkStatementsForLabelsLocal(stmt.AndStatement.Statements);
         } else if (stmt.OrStatement) {
-          checkStatementsForLabels(stmt.OrStatement.Statements);
+          checkStatementsForLabelsLocal(stmt.OrStatement.Statements);
         } else if (stmt.NotStatement) {
-          checkStatementsForLabels([stmt.NotStatement.Statement]);
+          checkStatementsForLabelsLocal([stmt.NotStatement.Statement]);
         }
       });
     };
     if (rule.Statement) {
       if (rule.Statement.AndStatement)
-        checkStatementsForLabels(rule.Statement.AndStatement.Statements);
+        checkStatementsForLabelsLocal(rule.Statement.AndStatement.Statements);
       else if (rule.Statement.OrStatement)
-        checkStatementsForLabels(rule.Statement.OrStatement.Statements);
+        checkStatementsForLabelsLocal(rule.Statement.OrStatement.Statements);
       else if (rule.Statement.NotStatement)
-        checkStatementsForLabels([rule.Statement.NotStatement.Statement]);
-      else checkStatementsForLabels([rule.Statement]);
+        checkStatementsForLabelsLocal([rule.Statement.NotStatement.Statement]);
+      else checkStatementsForLabelsLocal([rule.Statement]);
     }
   });
   return usedLabels;
@@ -338,11 +354,12 @@ const processWafRules = (data) => {
   const rules = data[0].Rules;
   const nodes = [];
   const edges = [];
+  // labelMap: label name => array of rule names that produce it
   const labelMap = new Map();
   const labelProviders = new Map();
   const ruleDependencies = new Map();
 
-  // First pass: Build label map and providers.
+  // בניית מפת תוויות
   rules.forEach((rule) => {
     if (rule.RuleLabels) {
       rule.RuleLabels.forEach(label => {
@@ -355,7 +372,7 @@ const processWafRules = (data) => {
     }
   });
 
-  // Second pass: Build direct rule dependencies.
+  // בניית מפת תלות בין חוקים
   rules.forEach((rule) => {
     const dependencies = new Set();
     const processStatement = (stmt) => {
@@ -383,10 +400,7 @@ const processWafRules = (data) => {
     ruleDependencies.set(rule.Name, Array.from(dependencies));
   });
 
-  // Calculate levels for layout
   const { levels } = calculateDependencyLevels(rules, labelMap);
-
-  // Group rules by level
   const nodesByLevel = new Map();
   rules.forEach(rule => {
     const level = levels.get(rule.Name);
@@ -396,21 +410,19 @@ const processWafRules = (data) => {
     nodesByLevel.get(level).push(rule);
   });
 
-  // Validate each rule and store issues
   const ruleIssuesMap = new Map();
   rules.forEach(rule => {
     const issues = validateRule(rule, labelMap, rules, ruleDependencies);
     ruleIssuesMap.set(rule.Name, issues);
   });
 
-  // Layout the nodes
   const levelHeight = 200;
   const horizontalGap = 50;
   const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b);
 
   sortedLevels.forEach((level) => {
     const levelRules = nodesByLevel.get(level);
-    const y = (level + 1) * levelHeight; // shift down a bit
+    const y = (level + 1) * levelHeight;
     const totalWidth = levelRules.length * (nodeWidth + horizontalGap);
     const startX = (window.innerWidth - totalWidth) / 2;
 
@@ -434,13 +446,12 @@ const processWafRules = (data) => {
         whiteSpace: 'pre-wrap',
         textAlign: 'left',
       };
-      // Add a red frame if there are issues.
       if (issues.length > 0) {
         nodeStyle = { ...nodeStyle, border: '4px solid red' };
       }
       const newNode = {
         id: rule.Name,
-        type: 'custom-node', // Use our custom node type
+        type: 'custom-node',
         data: { label, issues },
         position: { x, y },
         style: nodeStyle,
@@ -450,7 +461,6 @@ const processWafRules = (data) => {
       };
       nodes.push(newNode);
 
-      // Create edges for dependencies
       dependencies.forEach(depLabel => {
         const sources = labelMap.get(depLabel) || [];
         sources.forEach(source => {
@@ -459,9 +469,11 @@ const processWafRules = (data) => {
             id: `${source}-${rule.Name}`,
             source: source,
             target: rule.Name,
+            sourceHandle: 'source',
+            targetHandle: 'target',
             type: 'custom-edge',
             animated: true,
-            data: { isHighlighted: false },
+            data: { isHighlighted: false, offset: 0 },
             style: {
               stroke: '#888',
               strokeWidth: 2,
@@ -470,10 +482,41 @@ const processWafRules = (data) => {
               type: MarkerType.ArrowClosed,
             },
           };
+          const sourceRule = rules.find(r => r.Name === source);
+          const currentRule = rule;
+          const isBlocking = (r) => {
+            return (r.Action && Object.keys(r.Action)[0] === 'Block') ||
+                   (r.OverrideAction && Object.keys(r.OverrideAction)[0] === 'Block');
+          };
+          if (sourceRule && isBlocking(sourceRule) && isBlocking(currentRule)) {
+            newEdge.data.permanentIssue = true;
+            newEdge.style.stroke = '#ff0000';
+            newEdge.style.opacity = 1;
+          }
           edges.push(newEdge);
         });
       });
     });
+  });
+
+  // קיבוץ קווים לפי מקור-יעד ומתן אופסט לכל קו במידה ויש יותר מקו אחד באותו זוג
+  const edgeGroups = {};
+  edges.forEach(edge => {
+    const key = `${edge.source}-${edge.target}`;
+    if (!edgeGroups[key]) {
+      edgeGroups[key] = [];
+    }
+    edgeGroups[key].push(edge);
+  });
+  Object.values(edgeGroups).forEach(group => {
+    if (group.length > 1) {
+      const count = group.length;
+      group.forEach((edge, index) => {
+        edge.data.offset = (index - (count - 1) / 2) * 15;
+      });
+    } else {
+      group[0].data.offset = 0;
+    }
   });
 
   return { nodes, edges };
@@ -508,7 +551,6 @@ const getNodeStyle = (action) => {
   }
 };
 
-// Define node and edge types
 const nodeTypes = {
   'custom-node': CustomNode,
 };
@@ -579,7 +621,6 @@ function WafTree() {
     setSelectedRule(rule);
   }, [clickedNode, highlightConnectedEdges, nodes]);
 
-  // Handle file upload to load JSON data
   const handleFileUpload = useCallback((event) => {
     const file = event.target.files[0];
     if (file) {
@@ -697,7 +738,6 @@ function WafTree() {
   useEffect(() => { filterGraph(searchText); }, [searchText, filterGraph]);
   useEffect(() => { fetchServerRules(); }, [fetchServerRules]);
 
-  // Global list of nodes with issues (for the global warning indicator)
   const problemNodes = nodes.filter(node => node.data.issues && node.data.issues.length > 0);
 
   return (
@@ -811,7 +851,6 @@ function WafTree() {
         </Panel>
       </ReactFlow>
 
-      {/* Global Warning Triangle with Count Badge (Bottom Right) */}
       {problemNodes.length > 0 && (
         <div className="global-warning" onClick={() => setShowGlobalProblems(!showGlobalProblems)}>
           <span role="img" aria-label="warning">⚠️</span>
@@ -819,7 +858,6 @@ function WafTree() {
         </div>
       )}
 
-      {/* Global Problems Popup */}
       {showGlobalProblems && (
         <div className="global-problems-popup">
           <h3>Rules with Issues</h3>

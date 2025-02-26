@@ -113,6 +113,7 @@
   width: 200px;
   background: white;
   transition: all 0.3s ease;
+  color: black;
 }
 
 .search-input:focus {
@@ -202,6 +203,7 @@
   max-width: 500px;
   max-height: 400px;
   overflow-y: auto;
+  color: black;
 }
 
 .custom-node {

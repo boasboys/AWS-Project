@@ -19,7 +19,7 @@
   width: 90%;
   max-width: 300px;
   max-height: 400px;
-  overflow-y: scroll; /* הסרת גלילה */
+  overflow-y: auto;
   position: absolute;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   animation: slideIn 0.3s ease-out;
@@ -55,6 +55,31 @@
 .close-button:hover {
   background: #f0f0f0;
   color: #333;
+}
+
+.popup-menu {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 5px;
+}
+
+.popup-menu button {
+  background: none;
+  border: none;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  color: #555;
+}
+
+.popup-menu button.active {
+  color: #1565c0;
+  font-weight: bold;
+  border-bottom: 2px solid #1565c0;
 }
 
 .rule-header {
@@ -162,6 +187,17 @@
   font-size: 10px;
 }
 
+/* JSON view styling with transition */
+.json-view {
+  animation: fadeIn 0.3s ease-in-out;
+  color: #2c3e50;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Scrollbar styling (אם יופיע) */
 .rule-popup-content::-webkit-scrollbar {
   width: 6px;
@@ -179,4 +215,8 @@
 
 .rule-popup-content::-webkit-scrollbar-thumb:hover {
   background: #a0aec0;
+}
+
+.warnings-container {
+  color: black;
 }
