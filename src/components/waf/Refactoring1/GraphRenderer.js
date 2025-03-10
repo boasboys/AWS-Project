@@ -8,12 +8,10 @@ export default class GraphRenderer {
     this.diagramHeight = diagramHeight;
     this.onNodeClick = onNodeClick;
     this.zoomBehavior = null;
-    console.log('[GraphRenderer] Initialized with diagram size:', diagramWidth, diagramHeight);
   }
 
   // Measure nodes and then set the same dimensions for all nodes.
   measureNodes(nodes) {
-    console.log('[GraphRenderer] Measuring nodes:', nodes);
     const measureSvg = d3.select('body')
       .append('svg')
       .attr('width', 0)
@@ -56,13 +54,11 @@ export default class GraphRenderer {
       // Store measured dimensions on each node (not used directly for drawing)
       node.measuredWidth = Math.max(bbox.width + padX, 60);
       node.measuredHeight = Math.max(bbox.height + padY, 40);
-      console.log(`[GraphRenderer] Measured node "${node.name}" - width: ${node.measuredWidth}, height: ${node.measuredHeight}`);
     });
 
     // Determine the maximum width and height across all nodes.
     const maxWidth = d3.max(nodes, d => d.measuredWidth);
     const maxHeight = d3.max(nodes, d => d.measuredHeight);
-    console.log('[GraphRenderer] Uniform node dimensions:', maxWidth, maxHeight);
 
     // Assign the same width and height to every node.
     nodes.forEach(node => {
@@ -91,13 +87,11 @@ export default class GraphRenderer {
       }
       currentX = nextX;
       currentY = nextY;
-      console.log(`[GraphRenderer] Node "${node.name}" positioned at (${node.x}, ${node.y})`);
     });
   }
 
   // Recursively highlights nodes related to the clicked node.
   highlightRecursively(node, nodeSel, links, errorNodeIdsLocal, allNodes) {
-    console.log('[GraphRenderer] Highlighting recursively for node:', node);
     nodeSel.select('rect')
       .attr('stroke', d => errorNodeIdsLocal.has(d.id) ? 'red' : (this.darkTheme ? '#eee' : '#fff'))
       .attr('stroke-width', d => errorNodeIdsLocal.has(d.id) ? 4 : 2);
@@ -134,12 +128,10 @@ export default class GraphRenderer {
       .select('rect')
       .attr('stroke', '#FFD700')
       .attr('stroke-width', 4);
-    console.log('[GraphRenderer] Highlight applied for node ids:', [...highlightIds]);
   }
 
   // Main function to draw the graph.
   drawGraph(nodes, links, errorNodeIdsLocal) {
-    console.log('[GraphRenderer] Drawing graph with', nodes.length, 'nodes and', links.length, 'links.');
     const svg = d3.select(this.svgElement);
     svg.selectAll('*').remove();
     svg.attr('width', this.diagramWidth)
@@ -156,7 +148,6 @@ export default class GraphRenderer {
 
     this._drawEdges(gContainer, nodes, links);
     this._drawNodes(gContainer, nodes, links, errorNodeIdsLocal);
-    console.log('[GraphRenderer] Graph drawn.');
   }
 
   // Helper to create arrow markers.

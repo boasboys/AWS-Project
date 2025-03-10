@@ -17,7 +17,7 @@ const UploadJsonButton = ({ onJsonUpload, fullWidth = true, variant = "contained
     reader.onload = (event) => {
       try {
         const jsonData = JSON.parse(event.target.result);
-        onJsonUpload(jsonData.Rules);
+        onJsonUpload({...jsonData, fileName: file.name?.split('.')[0]});        
       } catch (error) {
         console.error("שגיאה בקריאת קובץ JSON:", error);
       }

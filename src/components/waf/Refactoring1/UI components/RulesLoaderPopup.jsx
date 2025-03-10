@@ -73,7 +73,7 @@ const RulesLoaderPopup = ({ open, onRulesReceived, onClose }) => {
     setLoading(true);
     try {
       const data = await fetchAclDetail(selectedRegion, aclName);
-      onRulesReceived(data);
+      onRulesReceived({...data, region: selectedRegion});
       onClose();
     } catch (error) {
       console.error("❌ Error fetching ACL details:", error);

@@ -43,7 +43,6 @@ export default function WAFRuleTree() {
         n.ruleLabels.join(' ').toLowerCase().includes(lower) ||
         n.ruleState.join(' ').toLowerCase().includes(lower)
       );
-      console.log('[WAFRuleTree] Filtered nodes based on search term:', lower, filteredNodes);
     }
     const filteredIds = new Set(filteredNodes.map(n => n.id));
     const filteredLinks = aggregatedData.links.filter(
@@ -55,13 +54,11 @@ export default function WAFRuleTree() {
       nodes: filteredNodes,
       links: filteredLinks
     };
-    console.log('[WAFRuleTree] Aggregated graph data:', finalData);
     return finalData;
   }, [rulesData, searchTerm]);
 
   // פונקציה משותפת לציור הגרף, המכילה את כל הלוגיקה של מדידת צמתים, סידור וציור
   const renderGraph = (aggregatedData) => {
-    console.log('[WAFRuleTree] Drawing graph with aggregated data.');
     const graphRenderer = new GraphRenderer(
       svgRef.current,
       darkTheme,
@@ -122,7 +119,7 @@ export default function WAFRuleTree() {
           onRulesReceived={(data) => {
             console.log('data', data);
             setRulesData(data.Rules || data);
-            setAclDetails({ aclName: data.Name || 'local json', capacity: data.Capacity || 0 });
+            setAclDetails({ aclName: (data.Name || data.fileName) || 'local json', capacity: data.Capacity || 0 , region: data.region || '' });
             setLoaderPopupOpen(false);
           }}
           onClose={() => { setLoaderPopupOpen(false) }}

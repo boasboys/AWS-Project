@@ -18,9 +18,7 @@ export default class RuleTransformer {
       const labelState = this.labelStatement(rule.Statement, newRules, index);
       const labelScopeDown = rule.Statement?.RateBasedStatement?.ScopeDownStatement ?
       this.labelStatement(rule.Statement.RateBasedStatement.ScopeDownStatement, newRules, index) : [];
-      
-      console.log('rule', rule.OverrideAction);
-      const transformedRule = {
+            const transformedRule = {
         json: JSON.stringify(rule, null, 2),
         id: index,
         name: rule.Name,

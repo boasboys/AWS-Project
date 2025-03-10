@@ -8,8 +8,7 @@ import { useState } from 'react';
 
 const TopBar = ({ darkTheme, onFullView, searchTerm, setSearchTerm, onWarnings, warningCount, setLoaderPopupOpen, aclDetails }) => {
   const [showSearch, setShowSearch] = useState(false);
-  console.log('aclDetails', aclDetails);
-  
+
   return (
     <Box
       sx={{
@@ -71,21 +70,24 @@ const TopBar = ({ darkTheme, onFullView, searchTerm, setSearchTerm, onWarnings, 
         <Button variant='contained' style={{ marginLeft: '10px' }} onClick={() => setLoaderPopupOpen(p => !p)}>loading rules</Button>
       </Box>
 
-      <Box sx={{ flexGrow: 1, textAlign: 'center' }}>
+      <Box sx={{ flexGrow: 1, textAlign: 'center', display: 'flex', flexDirection: 'row', justifyContent: 'center', gap: 10 }}> 
         <Typography variant='h6' sx={{ color: darkTheme ? '#fff' : '#444' }}>
-          {aclDetails.aclName || ''}
+          {aclDetails.aclName ? `ACL:  ${aclDetails.aclName}` : ''}
+        </Typography>
+        <Typography variant='h6' sx={{ color: darkTheme ? '#fff' : '#444' }}>
+          {aclDetails.region ? `region:  ${aclDetails.region}` : ''}
         </Typography>
       </Box>
 
       <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
-      {aclDetails.capacity > 1500 ? (
+        {aclDetails.capacity > 1500 ? (
           <WarningAmberIcon fontSize="small" sx={{ color: 'red' }} />
         ) : aclDetails.capacity > 1300 ? (
           <WarningAmberIcon fontSize="small" sx={{ color: 'orange' }} />
         ) : null}
         <Typography variant="body2" sx={{ color: darkTheme ? '#fff' : '#444', mr: 1, marginLeft: '10px' }}>
           {aclDetails.capacity > 0 ? `WCUs: ${aclDetails.capacity} / 1500` : ''}
-        </Typography>
+        </Typography>
         {warningCount > 0 && (
           <Tooltip title="Show Validation Errors">
             <IconButton sx={{ color: 'red' }} onClick={onWarnings}>
