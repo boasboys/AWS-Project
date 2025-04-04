@@ -15,6 +15,7 @@ export default function AnalyzedInfoSection({ dataArray, rule }) {
         <section
             className="info-section"
             style={{
+                display: data?.rules.length>0? 'block' : 'none',
                 backgroundColor: getColor('barBackground'),
                 marginBottom: '12px'
             }}
