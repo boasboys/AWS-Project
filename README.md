@@ -7,51 +7,55 @@ This application is a visualization and management tool for AWS WAF (Web Applica
 - Node.js (v14 or higher)
 - npm (Node Package Manager)
 - Modern web browser (Chrome, Firefox, Safari, or Edge)
+- AWS Account with WAF access
 
 ## Environment Setup
-1. Create a `.env` file in the project root directory
-2. Add the following environment variables:
+
+1. Create a `.env` file in the frontend directory:
 ```bash
-VITE_REACT_APP_API_BASE_URL = '[Your API base URL]'  # Example: http://localhost:5000/api
-VITE_REACT_APP_OPENAI_API_KEY = '[Your OpenAI API key]'  # Get from your OpenAI account
+VITE_REACT_APP_API_BASE_URL = 'http://localhost:5000/api'  # Backend API URL
+VITE_REACT_APP_OPENAI_API_KEY = '[Your OpenAI API key]'    # Optional: for AI features
 ```
 
-**Environment Variables Description:**
-- `VITE_REACT_APP_API_BASE_URL`: The base URL for your backend API server
-- `VITE_REACT_APP_OPENAI_API_KEY`: Your OpenAI API key for AI features. You can get this from your OpenAI account dashboard
-
-**Note:** 
-- Never commit the `.env` file to version control to protect sensitive information
-- Make sure to replace the placeholder values with your actual credentials
-- The `.env` file should be created locally and not shared with others
+2. Create a `.env` file in the backend directory:
+```bash
+PORT=5000                           # Backend server port
+AWS_ACCESS_KEY_ID=[Your AWS Key]    # AWS credentials
+AWS_SECRET_ACCESS_KEY=[Your AWS Secret]
+AWS_REGION=[Your AWS Region]        # e.g. us-east-1
+```
 
 ## Installation
 
 1. Clone the repository:
 ```bash
 git clone https://github.com/boasboys/AWS-Project.git
-```
-
-2. Navigate to the project directory:
-```bash
 cd AWS-Project
 ```
 
-3. Install dependencies:
+2. Install all dependencies (frontend and backend):
 ```bash
 npm install
 ```
 
 ## Running the Application
 
-1. Start the development server:
+Start both frontend and backend servers with a single command:
 ```bash
 npm run dev
 ```
 
-2. Open your browser and navigate to:
-```
-http://localhost:5173
+This will launch:
+- Frontend: http://localhost:5173
+- Backend: http://localhost:5000
+
+To run servers individually:
+```bash
+# Frontend only
+npm run dev:frontend
+
+# Backend only
+npm run dev:backend
 ```
 
 ## Features
@@ -66,23 +70,33 @@ http://localhost:5173
 - Dark/Light theme support
 
 ## Technology Stack
+### Frontend
 - React.js
 - Material-UI (@mui/material)
 - React Flow for visualization
 - html2canvas for exports
 - jsPDF for PDF generation
-- Custom rule parsing and transformation logic
 
-## Key Components
-- WAF Rule Tree Viewer
-- Request Debugger
-- Rule Details Popup
-- Rule Warnings System
-- ACL Loader
+### Backend
+- Express.js
+- AWS SDK for WAF integration
+- CORS for cross-origin support
+- dotenv for environment management
 
 ## File Structure
-- `/src/components/WAFView` - Main WAF visualization components
-- `/src/components/tree` - Tree transformation and node rendering
-- `/src/components/popup` - Popup components for rule details
-- `/src/debugger` - Request debugging functionality
-- `/src/components/upload` - File upload and ACL loading
+```
+/
+├── frontend/               # React frontend application
+│   ├── src/
+│   ├── public/
+│   └── package.json
+├── backend/               # Express backend server
+│   ├── src/
+│   └── package.json
+└── package.json          # Root package.json for project management
+```
+
+## Note
+- Never commit `.env` files to version control
+- Make sure to replace placeholder values in `.env` files with actual credentials
+- Ensure your AWS credentials have appropriate permissions for WAF operations
