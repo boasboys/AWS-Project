@@ -34,7 +34,7 @@ git clone [your-repository-url]
 
 2. Navigate to the project directory:
 ```bash
-cd [folder-name]
+cd AWS-Project
 ```
 
 3. Install dependencies:
@@ -46,12 +46,12 @@ npm install
 
 1. Start the development server:
 ```bash
-npm start
+npm run dev
 ```
 
 2. Open your browser and navigate to:
 ```
-http://localhost:3000
+http://localhost:5173
 ```
 
 ## Features
