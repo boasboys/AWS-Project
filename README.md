@@ -29,7 +29,7 @@ VITE_REACT_APP_OPENAI_API_KEY = '[Your OpenAI API key]'  # Get from your OpenAI 
 
 1. Clone the repository:
 ```bash
-git clone [your-repository-url]
+git clone https://github.com/boasboys/AWS-Project.git
 ```
 
 2. Navigate to the project directory:
