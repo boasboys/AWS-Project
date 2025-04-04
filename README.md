@@ -34,7 +34,7 @@ git clone [your-repository-url]
 
 2. Navigate to the project directory:
 ```bash
-cd final
+cd [folder-name]
 ```
 
 3. Install dependencies:
