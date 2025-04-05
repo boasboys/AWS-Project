@@ -20,8 +20,6 @@ VITE_REACT_APP_OPENAI_API_KEY = '[Your OpenAI API key]'    # Optional: for AI fe
 2. Create a `.env` file in the backend directory:
 ```bash
 PORT=5000                           # Backend server port
-AWS_ACCESS_KEY_ID=[Your AWS Key]    # AWS credentials
-AWS_SECRET_ACCESS_KEY=[Your AWS Secret]
 AWS_REGION=[Your AWS Region]        # e.g. us-east-1
 ```
 
