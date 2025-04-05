@@ -75,15 +75,17 @@ const TopBar = ({ searchTerm, setSearchTerm, onWarnings, warningCount, setLoader
 
       <Box sx={{ flexGrow: 1, textAlign: 'center' }}>
         <Typography variant='h6' sx={{ color: getColor('barText') }}>
-          {aclDetails.aclName || ''}
+          <Tooltip title="ACL Name">
+            <span>{aclDetails.aclName || ''}</span>
+          </Tooltip>
         </Typography>
       </Box>
 
       <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
         {aclDetails.capacity > 1500 ? (
-          <WarningAmberIcon fontSize="small" sx={{ color: getColor('warningHigh') }} />
+          <WarningAmberIcon fontSize="small" sx={{ color: 'red' }} />
         ) : aclDetails.capacity > 1300 ? (
-          <WarningAmberIcon fontSize="small" sx={{ color: getColor('warningMedium') }} />
+          <WarningAmberIcon fontSize="small" sx={{ color: 'orange' }} />
         ) : null}
         <Typography
           variant="body2"
@@ -93,7 +95,9 @@ const TopBar = ({ searchTerm, setSearchTerm, onWarnings, warningCount, setLoader
             marginLeft: '10px'
           }}
         >
-          {aclDetails.capacity > 0 ? `WCUs: ${aclDetails.capacity} / 1500` : ''}
+          <Tooltip title="WCUs used">
+            <span>{aclDetails.capacity > 0 ? `WCUs: ${aclDetails.capacity} / 1500` : ''}</span>
+          </Tooltip>
         </Typography>
         {warningCount > 0 && (
           <Tooltip title="Show Validation Warnings">

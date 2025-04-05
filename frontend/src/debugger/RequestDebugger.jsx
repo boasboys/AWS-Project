@@ -319,7 +319,6 @@ const RequestDebugger = ({ rules = [] }) => {
             } else if (rule.Statement) {
                 // Process different statement types
                 const statementType = getStatementType(rule.Statement);
-                console.log(`[RequestDebugger] Processing rule with statement type: ${statementType}`);
 
                 switch (statementType) {
                     case 'ByteMatchStatement':

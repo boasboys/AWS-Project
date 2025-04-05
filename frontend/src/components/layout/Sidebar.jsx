@@ -31,8 +31,8 @@ export default function Sidebar({ view, setView }) {
   const { darkTheme, setDarkTheme, getColor } = useThemeContext();
 
   const menuItems = [
-    { key: 'home', label: 'Home', icon: <HomeIcon sx={{ color: getColor('barText') }} t />,onClick:() => navigate('/')} ,
-    { key: 'tree', label: 'WAF Tree', icon: <TreeIcon sx={{ color: getColor('barText') }} t /> },
+    { key: 'home', label: 'Home', icon: <HomeIcon sx={{ color: getColor('barText') }} t='true' />,onClick:() => navigate('/')} ,
+    { key: 'tree', label: 'WAF Tree', icon: <TreeIcon sx={{ color: getColor('barText') }} t='true' /> },
     { key: 'debugger', label: 'Request Debugger', icon: <DebugIcon sx={{ color: getColor('barText') }} /> },
     {
       key: 'theme',

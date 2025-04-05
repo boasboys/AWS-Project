@@ -23,7 +23,6 @@ export default class Tree {
                 },
             });
         });
-        console.log(nodes);
 
         this.calculateNodePositionZ(nodes);
         return nodes;
